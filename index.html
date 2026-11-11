@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Natural Gas Shock Monitor</title>
+  <meta name="description" content="Do natural gas price spikes lead S&amp;P 500 drawdowns? A roll-adjusted, look-ahead-free event study with a baseline, a VIX control and placebo-tested p-values.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-row">
+      <span class="brand">Natural Gas Shock Monitor</span>
+      <span class="muted small" id="updated"></span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow" id="hero-date">Loading…</p>
+        <h1><span class="dot" id="hero-dot"></span><span id="hero-state">—</span></h1>
+        <p id="hero-desc" class="lead"></p>
+        <dl class="kpis">
+          <div><dt>Gas, 5 days</dt><dd id="kpi-gas">—</dd><span class="muted small" id="kpi-gas-sub"></span></div>
+          <div><dt>VIX</dt><dd id="kpi-vix">—</dd><span class="muted small">close</span></div>
+          <div><dt>Last spike</dt><dd id="kpi-last">—</dd><span class="muted small" id="kpi-last-sub"></span></div>
+        </dl>
+        <p class="muted small" id="hero-note"></p>
+      </div>
+      <figure class="card study">
+        <div class="study-box"><canvas id="study" aria-label="Average S&amp;P 500 path around natural gas spikes, against all days and a placebo band"></canvas></div>
+        <figcaption class="muted small">Average S&amp;P 500 move around a gas spike (day 0). Inside the grey band it is indistinguishable from randomly placed dates.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Natural gas and its spikes</h2>
+        <label class="toggle"><input type="checkbox" id="sp-toggle"> S&amp;P 500 (log)</label>
+      </div>
+      <div class="card chart-card"><canvas id="history"></canvas></div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section>
+      <h2>Does a gas spike mean anything for stocks?</h2>
+      <p class="muted">S&amp;P 500 after each spike, against every day in the sample and against days with a similar VIX. The p-value is the share of placebo tests (the same spike pattern shifted in time) that show a gap at least as large; below 0.05 would be evidence of an effect.</p>
+      <div class="card table-wrap">
+        <table id="results-table">
+          <thead>
+            <tr><th>Horizon</th><th class="r">Spikes</th><th class="r">S&amp;P after a spike</th><th class="r">S&amp;P, all days</th><th class="r">Gap</th><th class="r">Gap at same VIX</th><th class="r">Fell ≥5%: after a spike</th><th class="r">Fell ≥5%: all days</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3>Does the answer depend on the definition?</h3>
+      <p class="muted">The same 3-month test with other thresholds, in sub-periods, and with the fixed-percentage rule this site used before.</p>
+      <div class="card table-wrap">
+        <table id="robust-table">
+          <thead>
+            <tr><th>Variant</th><th class="r">Spikes</th><th class="r">S&amp;P after a spike</th><th class="r">S&amp;P, all days</th><th class="r">Gap</th><th class="r">Gap at same VIX</th><th class="r">Fell ≥5%: after / all</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Every spike</h2>
+      <p class="muted">S&amp;P 500 returns are measured from the close on the spike day. A dash means not yet known.</p>
+      <div class="card table-wrap scroll">
+        <table id="events-table">
+          <thead>
+            <tr><th>Date</th><th class="r">Gas price</th><th class="r">Gas, 5 days</th><th class="r">Size (z)</th><th class="r">VIX</th><th class="r">S&amp;P +1m</th><th class="r">S&amp;P +3m</th><th class="r">S&amp;P +6m</th><th class="r">Worst fall in 3m</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="method">
+      <h2>Methodology</h2>
+      <details open>
+        <summary>How a spike is defined and tested</summary>
+        <ol>
+          <li><b>Roll-adjusted gas returns.</b> NG=F is the front-month Henry Hub future, unadjusted. On the second-to-last trading day of each month it switches to the next contract, and the price gap between the two contracts shows up as a move that never happened (about +6% on average in autumn, −6% in January). Those daily returns are dropped.</li>
+          <li><b>Spike</b> = 5-day gas return of at least <span id="m-z">2.5</span> standard deviations, where the standard deviation is taken from the 252 trading days before the window. Gas volatility ranges from 30% to over 100% a year, so a fixed threshold such as +15% means different things in different years.</li>
+          <li><b>One event per episode.</b> After a spike, no new one can fire for 21 trading days. The date is the first day the threshold is crossed and never moves afterwards.</li>
+          <li><b>Outcome</b> = S&amp;P 500 return 1, 3 and 6 months after the spike-day close, and whether it closed 5% or more below that level at any point in between.</li>
+          <li><b>Baseline.</b> The same outcome averaged over every day, and over days in the same VIX bucket (&lt;15, 15–20, 20–30, ≥30). High VIX on its own goes with larger drawdowns, so without this control a "gas + VIX" signal mostly measures the VIX.</li>
+          <li><b>p-values by circular shift.</b> Spikes cluster and the forward windows overlap, so the events are not independent draws. The whole set of spike dates is shifted through the sample one day at a time, the gap is recomputed for every shift, and the p-value is the share of shifts with a gap at least as large (two-sided).</li>
+        </ol>
+      </details>
+      <details>
+        <summary>What changed from the first version</summary>
+        <ul>
+          <li><b>No baseline.</b> It reported that 36% of spikes were followed by a 5% S&amp;P drawdown within 3 months. About a third of <i>all</i> days are.</li>
+          <li><b>Roll artifacts counted as spikes.</b> 43 of its 102 events had a contract switch inside the 5-day window.</li>
+          <li><b>Filters fitted to the outcome.</b> Four "fakeout" rules were chosen after seeing which spikes failed, then scored on the same spikes. That guarantees a good-looking result and says nothing about the next one.</li>
+          <li><b>Look-ahead.</b> An event was replaced when a larger spike arrived within 15 days, and the drawdown window included the spike day's own low.</li>
+          <li><b>Hard-coded statistics</b> in the page that did not update with the data, and trading advice built on them.</li>
+        </ul>
+      </details>
+      <details>
+        <summary>Limitations</summary>
+        <ul>
+          <li>Around twenty spikes in 25 years is a small sample. The test can rule out a large, reliable effect; it cannot rule out a small one.</li>
+          <li>The roll adjustment removes one day per month by calendar rule. It is an approximation of a properly back-adjusted series built from individual contracts.</li>
+          <li>The VIX control uses full-sample bucket averages. That is fine for asking whether gas adds information, not for trading.</li>
+          <li>Three horizons and several variants are shown; with that many tests, an occasional p-value under 0.05 is expected by chance.</li>
+          <li>Henry Hub is a US domestic price. European gas (TTF), which drove the 2022 energy crisis, is not covered.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
+  <footer class="wrap muted small foot">
+    Data: Yahoo Finance daily closes (NG=F, ^GSPC, ^VIX). Refreshed on trading days. Not investment advice.
+    · <a href="https://github.com/kaloyantosev/natgas-shock">Source</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

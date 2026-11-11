@@ -1,0 +1,41 @@
+name: Refresh natural gas data
+
+# Daily closes from Yahoo Finance. Runs after the US close on trading days.
+on:
+  schedule:
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python fetch_data.py
+      - name: Commit if changed
+        run: |
+          # generated_at always changes, so compare everything except it
+          if python - <<'PY'
+          import json, subprocess, sys
+          old = json.loads(subprocess.run(["git", "show", "HEAD:natgas_data.json"], capture_output=True, text=True).stdout or "{}")
+          new = json.load(open("natgas_data.json"))
+          for d in (old, new):
+              d.pop("generated_at", None)
+          sys.exit(0 if old == new else 1)
+          PY
+          then
+            echo "No new data."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add natgas_data.json
+          git commit -m "data: refresh natural gas ($(date -u +%Y-%m-%d))"
+          git push
