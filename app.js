@@ -16,8 +16,10 @@ async function main() {
   Chart.defaults.borderColor = css('--line');
 
   renderHero(data);
-  renderStudy(data.path);
-  renderHistory(data.series, data.events);
+  renderStudy('study', data.path, 'After a gas spike', 'S&P 500, % from day 0', '--gas', 'Trading days from spike');
+  renderStudy('gas-study', data.gas_path, 'Gas around an S&P peak', 'Natural gas, % from day 0', '--gas', 'Trading days from S&P peak');
+  renderBefore(data.before, data.corrections);
+  renderHistory(data.series, data.events, data.corrections);
   renderResults(data.results);
   renderRobustness(data.robustness);
   renderEvents(data.events);
@@ -51,14 +53,14 @@ function renderHero(data) {
 }
 
 // ── Event study ───────────────────────────────────────────────────────────────
-function renderStudy(path) {
+function renderStudy(canvas, path, label, yTitle, color, xTitle) {
   const line = (key, color, extra = {}) => ({ data: path.map((d) => d[key]), borderColor: color, borderWidth: 2, pointRadius: 0, ...extra });
-  new Chart($('study'), {
+  new Chart($(canvas), {
     type: 'line',
     data: {
       labels: path.map((d) => d.k),
       datasets: [
-        line('event', css('--gas'), { label: 'After a gas spike' }),
+        line('event', css(color), { label }),
         line('all', css('--muted'), { label: 'All days', borderWidth: 1.5, borderDash: [4, 3] }),
         line('lo', 'transparent', { label: 'Placebo 5%', borderWidth: 0 }),
         line('hi', 'transparent', { label: 'Placebo 95%', borderWidth: 0, fill: '-1', backgroundColor: css('--band') }),
@@ -73,15 +75,30 @@ function renderStudy(path) {
         tooltip: { callbacks: { title: (items) => `Day ${fmt(+items[0].label, 0)}`, label: (c) => `${c.dataset.label}: ${pct(c.raw)}` } },
       },
       scales: {
-        x: { title: { display: true, text: 'Trading days from spike' }, grid: { color: (c) => (path[c.index]?.k === 0 ? css('--muted') : 'transparent') }, ticks: { maxRotation: 0, autoSkip: false, callback: (v, i) => (path[i].k % 21 === 0 ? path[i].k : null) } },
-        y: { title: { display: true, text: 'S&P 500, % from day 0' } },
+        x: { title: { display: true, text: xTitle }, grid: { color: (c) => (path[c.index]?.k === 0 ? css('--muted') : 'transparent') }, ticks: { maxRotation: 0, autoSkip: false, callback: (v, i) => (path[i].k % 21 === 0 ? path[i].k : null) } },
+        y: { title: { display: true, text: yTitle } },
       },
     },
   });
 }
 
 // ── History chart ─────────────────────────────────────────────────────────────
-function renderHistory(series, events) {
+function renderHistory(series, events, corrections) {
+  const at = new Map(series.dates.map((d, i) => [d, i]));
+  const bands = {
+    id: 'bands',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { x } } = chart;
+      ctx.save();
+      ctx.fillStyle = css('--band');
+      for (const c of corrections) {
+        const x0 = Math.max(a.left, x.getPixelForValue(at.get(c.peak)));
+        const x1 = Math.min(a.right, x.getPixelForValue(at.get(c.trough)));
+        if (x1 > x0) ctx.fillRect(x0, a.top, Math.max(x1 - x0, 2), a.bottom - a.top);
+      }
+      ctx.restore();
+    },
+  };
   const spikes = new Map(events.map((e) => [e.date, e]));
   const year = (i) => series.dates[i].slice(0, 4);
   const chart = new Chart($('history'), {
@@ -127,6 +144,7 @@ function renderHistory(series, events) {
         sp: { type: 'logarithmic', position: 'right', display: false, grid: { display: false }, ticks: { callback: (v) => ([1000, 2000, 5000, 10000].includes(v) ? v.toLocaleString() : null) } },
       },
     },
+    plugins: [bands],
   });
 
   $('sp-toggle').addEventListener('change', (e) => {
@@ -138,7 +156,54 @@ function renderHistory(series, events) {
   $('legend').innerHTML =
     `<span><i style="background:${css('--gas')}"></i>Natural gas (NG=F)</span>` +
     `<span><i style="background:${css('--down')};border-radius:50%"></i>Spike</span>` +
-    `<span><i style="background:${css('--muted')}"></i>S&P 500 (toggle)</span>`;
+    `<span><i style="background:${css('--muted')}"></i>S&P 500 (toggle)</span>` +
+    `<span><i style="background:${css('--band')};border:1px solid ${css('--line')}"></i>S&P correction, peak to low</span>`;
+}
+
+// ── Before corrections ────────────────────────────────────────────────────────
+const LOOKBACK = { '1w': '1 week', '1m': '1 month', '3m': '3 months', '6m': '6 months' };
+
+function renderBefore(rows, corrections) {
+  const best = rows.reduce((a, b) => (b.gas_p < a.gas_p ? b : a));
+  const m = rows.find((r) => r.lookback === '1m');
+  const rose = corrections.filter((c) => c.gas_1m > 0).length;
+  $('before-lead').textContent =
+    `${corrections.length} corrections since 2001. In the month before the peak gas rose in ${rose} of them (on a typical day it is up over the past month ${m.up_all}% of the time; p = ${m.up_p.toFixed(2)}), by ${pct(m.gas_peak)} on average. ` +
+    (m.up_p < 0.05
+      ? 'That direction is more consistent than random dates usually produce. Treat it as a lead, not proof: it rests on ten peaks, a dozen statistics are tested here, and stocks themselves rally into a peak, a risk-on backdrop in which commodities also tend to rise. '
+      : `No window is clearly different from random dates (smallest p = ${best.gas_p.toFixed(2)}, ${best.n} peaks). `) +
+    (rows.filter((r) => r.days >= 63).every((r) => r.gas_p > 0.1 && r.spike_p > 0.1)
+      ? 'Over three to six months there is nothing: gas was not unusually strong, and spikes were no more common before peaks than at any other time.'
+      : '');
+
+  $('before-table').querySelector('tbody').innerHTML = rows
+    .map((r) => `<tr>
+      <td>${LOOKBACK[r.lookback]}<span class="sub">${r.days} trading days</span></td>
+      <td class="r">${r.n}</td>
+      <td class="r">${signed(r.gas_peak)}</td>
+      <td class="r">${pct(r.gas_median_peak)}</td>
+      <td class="r">${pct(r.gas_all)}</td>
+      <td class="r">${fmt(r.gas_diff)} pp${pval(r.gas_p)}</td>
+      <td class="r">${share(r.up_peak)}${pval(r.up_p)}</td>
+      <td class="r">${share(r.up_all)}</td>
+      <td class="r">${share(r.spike_peak)}${pval(r.spike_p)}</td>
+      <td class="r">${share(r.spike_all)}</td>
+    </tr>`)
+    .join('');
+
+  $('corr-table').querySelector('tbody').innerHTML = [...corrections]
+    .reverse()
+    .map((c) => `<tr>
+      <td>${day(c.peak)}<span class="sub">${c.depth <= -20 ? 'Bear market' : 'Correction'}, low ${day(c.trough)}</span></td>
+      <td class="r neg">${pct(c.depth)}</td>
+      <td class="r">${c.days}</td>
+      <td class="r">${signed(c.gas_1w)}</td>
+      <td class="r">${signed(c.gas_1m)}</td>
+      <td class="r">${signed(c.gas_3m)}</td>
+      <td class="r">${signed(c.gas_6m)}</td>
+      <td class="r">${c.last_spike ? day(c.last_spike) : '—'}<span class="sub">${c.spike_gap == null ? '' : `${c.spike_gap} trading days before`}</span></td>
+    </tr>`)
+    .join('');
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────────

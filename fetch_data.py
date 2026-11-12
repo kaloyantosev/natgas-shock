@@ -37,6 +37,10 @@ HORIZONS = {"1m": 21, "3m": 63, "6m": 126}
 DRAWDOWN = -5.0               # % fall from the event close that counts as a drawdown
 VIX_EDGES = [15, 20, 30]      # VIX buckets: <15, 15-20, 20-30, >=30
 PATH = (-21, 126)             # event-study window in trading days
+CORRECTION = -10.0            # % S&P fall from a closing high that counts as a correction
+REBOUND = 25.0                # % rally off a correction low that starts a new cycle
+LOOKBACKS = {"1w": 5, "1m": 21, "3m": 63, "6m": 126}
+GAS_PATH = (-126, 63)         # gas path around S&P peaks, trading days
 OUT = "natgas_data.json"
 
 
@@ -98,6 +102,43 @@ def shift_test(x, events, lo, hi):
     diff = null[0] - seg.mean()
     p = float((np.abs(null - seg.mean()) >= abs(diff) - 1e-12).mean())
     return float(diff), p, len(events)
+
+
+def find_corrections(price, threshold):
+    """(peak, trough, depth %) for every fall of at least `threshold` % from a closing
+    high. An episode ends at a new high, or at a REBOUND rally off its low, so
+    corrections inside a long bear (2010, 2011 under the 2007 high) count too."""
+    out, peak, low, live = [], 0, 0, False
+    for i, p in enumerate(price):
+        if p > price[peak] or (live and p >= price[low] * (1 + REBOUND / 100)):
+            if live:
+                out.append((peak, low, (price[low] / price[peak] - 1) * 100))
+            peak, low, live = i, i, False
+        else:
+            if p < price[low]:
+                low = i
+            live = live or (p / price[peak] - 1) * 100 <= threshold
+    if live:
+        out.append((peak, low, (price[low] / price[peak] - 1) * 100))
+    return out
+
+
+def event_path(level, events, start, k0, k1):
+    """Average change of `level` (log) from day 0 to day k around events, with a
+    5-95% band from circular shifts of the event dates."""
+    lo, hi = max(start, -k0), len(level) - k1
+    e = events[(events >= lo) & (events < hi)] - lo
+    n = hi - lo
+    idx = (e[None, :] + np.arange(n)[:, None]) % n
+    out = []
+    for k in range(k0, k1 + 1):
+        col = (level[lo + k:hi + k] - level[lo:hi]) * 100
+        null = col[idx].mean(axis=1)
+        out.append({
+            "k": k, "event": rnd(null[0]), "all": rnd(col.mean()),
+            "lo": rnd(np.percentile(null, 5)), "hi": rnd(np.percentile(null, 95)),
+        })
+    return out
 
 
 def rnd(x, n=2):
@@ -186,22 +227,48 @@ def main():
     ]
     robustness = [{"label": label, **evaluate(ev, "3m", lo, hi)} for label, ev, lo, hi in variants]
 
-    # Event-study path: average S&P move around a spike, against the same statistic
-    # for shifted (placebo) event dates.
-    k0, k1 = PATH
-    lo, hi = max(start, -k0), T - k1
-    e = events[(events >= lo) & (events < hi)] - lo
-    n = hi - lo
-    idx = (e[None, :] + np.arange(n)[:, None]) % n
-    logsp = np.log(sp)
-    path = []
-    for k in range(k0, k1 + 1):
-        col = (logsp[lo + k:hi + k] - logsp[lo:hi]) * 100
-        null = col[idx].mean(axis=1)
-        path.append({
-            "k": k, "event": rnd(null[0]), "all": rnd(col.mean()),
-            "lo": rnd(np.percentile(null, 5)), "hi": rnd(np.percentile(null, 95)),
+    # Event-study path: average S&P move around a spike, against placebo dates.
+    path = event_path(np.log(sp), events, start, *PATH)
+
+    # Reverse question: what did gas do in the days and months before each S&P
+    # correction? Peaks are dated with hindsight, so this is descriptive only.
+    g = np.cumsum(df["ret"].fillna(0).to_numpy())      # roll-adjusted log gas level
+    corr = [c for c in find_corrections(sp, CORRECTION) if c[0] >= start]
+    peaks = np.array([c[0] for c in corr], dtype=int)
+    hit = np.zeros(T)
+    hit[events] = 1
+    cum = np.concatenate([[0], np.cumsum(hit)])
+    before = []
+    for name, L in LOOKBACKS.items():
+        back = np.full(T, np.nan)
+        back[L:] = (g[L:] - g[:-L]) * 100
+        spiked = (cum[1:] - cum[np.maximum(np.arange(T) - L, 0)] > 0) * 100.0   # spike in (t-L, t]
+        lo = max(start, L)
+        d, p, n = shift_test(back, peaks, lo, T)
+        sd, sp_, _ = shift_test(spiked, peaks, lo, T)
+        up = np.where(np.isnan(back), np.nan, (back > 0) * 100.0)
+        ud, up_p, _ = shift_test(up, peaks, lo, T)
+        e = peaks[peaks >= lo]
+        before.append({
+            "lookback": name, "days": L, "n": n,
+            "gas_peak": rnd(back[e].mean(), 1), "gas_median_peak": rnd(np.median(back[e]), 1),
+            "gas_all": rnd(back[lo:].mean(), 1), "gas_diff": rnd(d, 1), "gas_p": rnd(p, 3),
+            "up_peak": rnd(up[e].mean(), 0), "up_all": rnd(up[lo:].mean(), 0), "up_p": rnd(up_p, 3),
+            "spike_peak": rnd(spiked[e].mean(), 0), "spike_all": rnd(spiked[lo:].mean(), 0), "spike_p": rnd(sp_, 3),
         })
+    corrections = []
+    for pk, tr, depth in corr:
+        prior = events[events <= pk]
+        row = {
+            "peak": df.index[pk].strftime("%Y-%m-%d"), "trough": df.index[tr].strftime("%Y-%m-%d"),
+            "depth": rnd(depth, 1), "days": int(tr - pk),
+            "last_spike": df.index[prior[-1]].strftime("%Y-%m-%d") if len(prior) else None,
+            "spike_gap": int(pk - prior[-1]) if len(prior) else None,
+        }
+        for name, L in LOOKBACKS.items():
+            row[f"gas_{name}"] = rnd((np.exp(g[pk] - g[pk - L]) - 1) * 100, 1)
+        corrections.append(row)
+    gas_path = event_path(g, peaks, start, *GAS_PATH)
 
     event_rows = []
     for i in events:
@@ -236,6 +303,9 @@ def main():
         "results": results,
         "robustness": robustness,
         "path": path,
+        "before": before,
+        "corrections": corrections,
+        "gas_path": gas_path,
         "events": event_rows,
         "series": {
             "dates": [d.strftime("%Y-%m-%d") for d in df.index],
@@ -254,6 +324,11 @@ def main():
 
 
 def self_check():
+    # corrections: one per high, depth from the high, open episode reported
+    px = np.array([100, 110, 95, 99, 112, 100, 120, 105, 100])
+    # rebound: 100 -> 70 -> 90 (+29%) -> 78 is a second episode below the old high
+    assert [(a, b) for a, b, _ in find_corrections(np.array([100, 70, 90, 78]), -10)] == [(0, 1), (2, 3)]
+    assert [(a, b, round(c, 1)) for a, b, c in find_corrections(px, -10)] == [(1, 2, -13.6), (4, 5, -10.7), (6, 8, -16.7)]
     # refractory spacing is causal and strict
     sig = np.zeros(100, bool)
     sig[[10, 12, 31, 32, 60]] = True

@@ -69,6 +69,34 @@
     </section>
 
     <section>
+      <h2>What did gas do before each correction?</h2>
+      <p class="muted">The reverse question: start from every S&amp;P 500 fall of 10% or more from a high, and look at natural gas in the week to six months before the peak. Peaks are dated with hindsight, so this describes history; it is not a signal you could have traded.</p>
+      <p id="before-lead" class="lead" style="max-width:none"></p>
+      <div class="card chart-card"><canvas id="gas-study" aria-label="Average natural gas path around S&amp;P 500 peaks, against all days and a placebo band"></canvas></div>
+      <p class="muted small">Average roll-adjusted gas move around an S&amp;P 500 peak (day 0), relative to day 0: a line below zero on the left means gas rose into the peak. Grey band: 5–95% range for the same number of randomly shifted dates.</p>
+
+      <h3>Gas in the run-up to a peak, against all days</h3>
+      <div class="card table-wrap">
+        <table id="before-table">
+          <thead>
+            <tr><th>Window before the peak</th><th class="r">Peaks</th><th class="r">Gas, mean before a peak</th><th class="r">Gas, median before a peak</th><th class="r">Gas, all days</th><th class="r">Gap</th><th class="r">Gas up: before a peak</th><th class="r">Gas up: all days</th><th class="r">Had a spike: before a peak</th><th class="r">Had a spike: all days</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3>Every correction and bear market</h3>
+      <div class="card table-wrap">
+        <table id="corr-table">
+          <thead>
+            <tr><th>S&amp;P peak</th><th class="r">Fall</th><th class="r">Trading days to low</th><th class="r">Gas 1 week before</th><th class="r">1 month</th><th class="r">3 months</th><th class="r">6 months</th><th class="r">Last gas spike before</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
       <h2>Every spike</h2>
       <p class="muted">S&amp;P 500 returns are measured from the close on the spike day. A dash means not yet known.</p>
       <div class="card table-wrap scroll">
@@ -91,6 +119,7 @@
           <li><b>One event per episode.</b> After a spike, no new one can fire for 21 trading days. The date is the first day the threshold is crossed and never moves afterwards.</li>
           <li><b>Outcome</b> = S&amp;P 500 return 1, 3 and 6 months after the spike-day close, and whether it closed 5% or more below that level at any point in between.</li>
           <li><b>Baseline.</b> The same outcome averaged over every day, and over days in the same VIX bucket (&lt;15, 15–20, 20–30, ≥30). High VIX on its own goes with larger drawdowns, so without this control a "gas + VIX" signal mostly measures the VIX.</li>
+          <li><b>Corrections</b> = S&amp;P 500 closes at least 10% below a closing high (20% = bear market). An episode ends at a new high or after a 25% rally off its low, so the 2010 and 2011 corrections, which happened below the 2007 high, count separately. The sample starts in September 2001, so the 2000–2002 bear market is not included.</li>
           <li><b>p-values by circular shift.</b> Spikes cluster and the forward windows overlap, so the events are not independent draws. The whole set of spike dates is shifted through the sample one day at a time, the gap is recomputed for every shift, and the p-value is the share of shifts with a gap at least as large (two-sided).</li>
         </ol>
       </details>
