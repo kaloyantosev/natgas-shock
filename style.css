@@ -98,3 +98,10 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   .chart-card { height: 280px; }
   .study-box { height: 280px; }
 }
+
+.multiples { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.mult { margin: 0; padding: 12px; }
+.mult figcaption { font-size: 14px; margin-bottom: 6px; }
+.mult-stats { display: block; font-size: 13px; color: var(--muted); }
+.mult-box { position: relative; height: 200px; }
+@media (max-width: 820px) { .multiples { grid-template-columns: 1fr; } }
