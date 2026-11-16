@@ -8,7 +8,8 @@ const share = (x) => (x == null ? '—' : `${x.toFixed(0)}%`);
 const pv = (p) => (p < 0.001 ? '<0.001' : p.toFixed(p < 0.01 ? 3 : 2));
 const day = (s) => new Date(`${s}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 const month = (s) => new Date(`${s}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-const bucketName = (b) => (b.lo == null ? `below ${b.hi}%` : b.hi == null ? `+${b.lo}% or more` : `${fmt(b.lo, 0)}% to ${fmt(b.hi, 0)}%`);
+const bucketName = (b) => (b.lo == null ? `under +${b.hi}%` : b.hi == null ? `+${b.lo}% or more` : `+${b.lo}% to +${b.hi}%`);
+const WINDOW = { '1w': 'final week', '2w': 'final 2 weeks', '1m': 'final month', '2m': 'final 2 months' };
 
 function rgba(color, a) {
   const n = parseInt(color.slice(1), 16);
@@ -39,10 +40,12 @@ async function main() {
 
   const tests = verdictTests(data);
   renderHeader(data, tests);
+  renderRoles(data);
   renderTimeline(data.series, data.scenarios, data.params.runup);
-  renderCases(data.scenarios, data.backward);
-  renderGasPath(data.gas_path, data.backward);
+  renderCases(data.scenarios);
+  renderWindows(data.windows);
   renderCalendar(data.monthly);
+  renderHedge(data.scenarios, data.hedge);
   renderScatter(data.scenarios, data.backward);
   renderForward(data.forward, data.forward_all);
   renderScore(tests);
@@ -51,60 +54,90 @@ async function main() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
 }
 
+const win = (data, name) => data.windows.find((w) => w.window === name);
+
 // ── Verdict ──────────────────────────────────────────────────────────────────
 function verdictTests(data) {
   const b = data.backward;
-  const top = data.forward[data.forward.length - 1];
+  const h = data.hedge;
+  const w1 = win(data, '1w');
+  const w4 = win(data, '1m');
   const all = data.forward_all;
+  const top = data.forward[data.forward.length - 1];
   const best = data.forward.reduce((x, y) => (y.hit_p < x.hit_p && y.hit > all.hit ? y : x), top);
   return [
     {
-      q: 'Natural gas rose in the month before every major decline',
-      pass: b.rose_p < 0.05,
-      ev: `${b.rose} of ${b.n} peaks, against ${share(b.rose_all)} of all months (p = ${pv(b.rose_p)}). Random timing would rarely line up this well.`,
+      role: 'Leading indicator',
+      q: 'Gas spiked in the final week before major declines more often than usual',
+      pass: w1.spike_p < 0.05,
+      ev: `${w1.spiked} of ${w1.n} peaks had a spike in the final week, against ${share(w1.spike_all)} of all days (p = ${pv(w1.spike_p)}).`,
     },
     {
-      q: 'The rallies were unusually large',
-      pass: b.gas_p < 0.05,
-      ev: `Median run-up ${pct(b.gas_median)}, average ${pct(b.gas_mean)}, against ${pct(b.gas_all)} on a typical month (p = ${pv(b.gas_p)}). Most were small; one or two large rallies pull the average up.`,
+      role: 'Leading indicator',
+      q: 'Gas spiked in the month before major declines more often than usual',
+      pass: w4.spike_p < 0.05,
+      ev: `${w4.spiked} of ${w4.n} peaks, against ${share(w4.spike_all)} of all days (p = ${pv(w4.spike_p)}). Spikes are common: almost half of all months have one.`,
     },
     {
-      q: 'A bigger gas rally means a deeper crash',
-      pass: b.p_depth < 0.05 && b.r_depth > 0,
-      ev: `Correlation r = ${fmt(b.r_depth, 2)} (p = ${pv(b.p_depth)}). Against the time to the low: r = ${fmt(b.r_days, 2)}.`,
+      role: 'Leading indicator',
+      q: 'A bigger spike means a deeper crash',
+      pass: b.p_depth < 0.05 && b.r_depth < 0,
+      ev: `Correlation of spike size with depth r = ${fmt(b.r_depth, 2)} (p = ${pv(b.p_depth)}).`,
     },
     {
-      q: 'A gas rally warns of a crash in real time',
+      role: 'Leading indicator',
+      q: 'A gas spike raises the odds of a crash in real time',
       pass: best.hit_p < 0.05 && best.hit > all.hit,
-      ev: `After gas gained ${bucketName(top)} in a month, a 15%+ fall followed within 6 months ${share(top.hit)} of the time, against ${share(all.hit)} on all days (p = ${pv(top.hit_p)}).`,
+      ev: `After a spike of ${bucketName(top)}, a 15%+ fall followed within 6 months ${share(top.hit)} of the time, against ${share(all.hit)} on all days (p = ${pv(top.hit_p)}).`,
+    },
+    {
+      role: 'Hedge',
+      q: 'Gas rose while the S&P 500 fell in major declines',
+      pass: h.crash_p < 0.05 && h.crash_mean > h.crash_null && h.crash_up > b.n / 2,
+      ev: `Gas rose in ${h.crash_up} of ${b.n} declines. Median ${pct(h.crash_median)}; the average of ${pct(h.crash_mean)} is almost all 2022 (p = ${pv(h.crash_p)}).`,
+    },
+    {
+      role: 'Hedge',
+      q: 'Gas rises in bad months for stocks',
+      pass: h.bad_p < 0.05 && h.bad_gas > h.all_gas,
+      ev: `In the ${h.bad_months.toLocaleString()} 21-day windows where the S&P fell 5%+, gas averaged ${pct(h.bad_gas)} against ${pct(h.all_gas)} overall (p = ${pv(h.bad_p)}). Monthly correlation with stocks: ${fmt(h.corr_monthly, 2)}.`,
     },
   ];
 }
 
 function renderHeader(data, tests) {
   const b = data.backward;
+  const h = data.hedge;
+  const w1 = win(data, '1w');
   const passed = tests.filter((t) => t.pass).length;
   $('updated').textContent = `Data through ${day(data.latest.date)}`;
   $('byline').innerHTML =
     `<span><b>${b.n}</b> major declines since ${new Date(data.sample_start).getFullYear()}</span>` +
     `<span><b>${data.series.dates.length.toLocaleString()}</b> trading days</span>` +
-    `<span>Refreshed every trading day</span>`;
-  $('verdict').textContent = passed === 0
-    ? 'The hypothesis fails every test.'
-    : passed === tests.length
-      ? 'The hypothesis survives every test.'
-      : tests[0].pass
-        ? 'Gas does rise before major crashes, but not by enough to warn you.'
-        : 'The evidence is mixed.';
+    '<span>Refreshed every trading day</span>';
+  $('verdict').textContent = passed === tests.length
+    ? 'Natural gas works as both a hedge and an early warning.'
+    : passed === 0
+      ? 'Natural gas played both roles in some crashes, but neither reliably.'
+      : 'The evidence is mixed: some roles hold, others do not.';
   $('abstract').textContent =
-    `Gas rose in the month before all ${b.rose === b.n ? '' : `but ${b.n - b.rose} of the `}${b.n} major S&P 500 declines since 2001, a pattern random timing rarely produces (p = ${pv(b.rose_p)}). ` +
-    `But the rises were mostly small, their size says nothing about how deep the fall was, and the same rallies happen all the time without a crash. ` +
-    `${passed} of ${tests.length} tests ${passed === 1 ? 'supports' : 'support'} the idea. The likeliest reading: gas rallies with everything else late in a bull market, which is a description of tops, not a forecast of them.`;
+    `Both roles appear in the record. Gas spiked in the final week before ${w1.spiked} of ${b.n} major S&P 500 declines, and it rose during ${h.crash_up} of them, most dramatically in 2022 when it more than doubled while stocks fell a quarter. ` +
+    `But neither pattern stands out from chance: spikes are frequent in any month, their size says nothing about the crash that follows, and in the other declines gas fell with stocks. ` +
+    `Over the whole period gas and stocks are almost uncorrelated (${fmt(h.corr_monthly, 2)} month to month). ${passed} of ${tests.length} tests support the idea. ` +
+    'Gas is better described as an independent risk that occasionally pays off in a crisis than as a dependable hedge or warning.';
   $('stats').innerHTML = [
-    [`${b.rose}/${b.n}`, 'crashes preceded by a gas rise in the month before'],
-    [pct(b.gas_median), 'median gas run-up before a crash peak'],
-    [`r = ${fmt(b.r_depth, 2)}`, 'correlation of run-up size with crash depth'],
+    [`${w1.spiked}/${b.n}`, 'crashes with a gas spike in the final week'],
+    [`${h.crash_up}/${b.n}`, 'crashes in which gas rose while stocks fell'],
+    [fmt(h.corr_monthly, 2), 'monthly correlation of gas with stocks'],
   ].map(([v, s]) => `<div><b>${v}</b><span>${s}</span></div>`).join('');
+}
+
+function renderRoles(data) {
+  const sc = data.scenarios;
+  const spikes = sc.filter((s) => s.spike_1w >= data.params.spike).map((s) => `${month(s.peak)} (${pct(s.spike_1w, 0)})`);
+  const hedges = sc.filter((s) => s.gas_dd > 0).map((s) => `${month(s.peak)} (gas ${pct(s.gas_dd, 0)}, S&P ${pct(s.depth, 0)})`);
+  $('role-lead').innerHTML = `<b>Where it showed up:</b> a spike in the final week before ${spikes.join(', ') || 'none'}.`;
+  $('role-hedge').innerHTML = `<b>Where it showed up:</b> ${hedges.join(', ') || 'none'}.`;
 }
 
 // ── Figure 1: timeline ───────────────────────────────────────────────────────
@@ -132,7 +165,6 @@ function renderTimeline(series, scenarios, runup) {
         ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
         ctx.fillStyle = crash;
         ctx.font = '600 11px Inter, system-ui, sans-serif';
-        ctx.textAlign = 'left';
         ctx.fillText(s.peak.slice(0, 4), x0 + 4, a.top + 12);
       }
       ctx.restore();
@@ -170,14 +202,12 @@ function renderTimeline(series, scenarios, runup) {
     `<span><i class="box" style="background:${rgba(crash, 0.3)}"></i>Major decline, peak to low</span>`;
 }
 
-// ── Section 2: one chart per crash ───────────────────────────────────────────
-function renderCases(scenarios, b) {
+// ── Section 3: one chart per crash ───────────────────────────────────────────
+function renderCases(scenarios) {
   const gas = css('--gas');
   const crash = css('--crash');
-  const big = scenarios.filter((s) => s.gas_1m >= 5).length;
   $('cases-lead').textContent =
-    `Gas rose before all ${b.rose === b.n ? b.n : `${b.rose} of ${b.n}`}, but look at the size: only ${big} of the run-ups exceeded 5%, and three were under 1%. ` +
-    'The percentile is where that month\'s gas move ranks among all months since 2001: 50 is an ordinary month.';
+    'Each chart runs from three months before the S&P peak to a month after the low. Look for two things: a spike in the shaded month (the dot marks the biggest 5-day gas gain in it), and whether the amber line climbs while the red one falls.';
   const shade = { id: 'shade', beforeDatasetsDraw(chart) {
     const { ctx, chartArea: a, scales: { x } } = chart;
     const ks = chart.data.labels;
@@ -196,18 +226,22 @@ function renderCases(scenarios, b) {
       <header><h3>${month(s.peak)}</h3><span class="tag">${s.bear ? 'Bear market' : 'Major correction'}</span></header>
       <div class="nums">
         <span>S&amp;P <b class="neg">${pct(s.depth)}</b> in ${s.days} days</span>
-        <span>Gas <b class="gas">${pct(s.gas_1m)}</b> in the month before</span>
-        <span>${s.pctile}th percentile</span>
+        <span>Spike before: <b class="gas">${pct(s.spike_1m)}</b> in 5 days, ${-s.spike_end === 0 ? 'on the peak day' : `${-s.spike_end} days before the peak`}</span>
+        <span>Gas during the fall: <b class="${s.gas_dd > 0 ? 'pos' : 'neg'}">${pct(s.gas_dd)}</b></span>
       </div>
       <div class="case-box"><canvas id="case-${i}" aria-label="Natural gas and S&amp;P 500 around the ${month(s.peak)} peak"></canvas></div>
     </figure>`).join('');
   scenarios.forEach((s, i) => {
+    const spikeAt = s.k.indexOf(s.spike_end);
     new Chart($(`case-${i}`), {
       type: 'line',
       data: {
         labels: s.k,
         datasets: [
-          { label: 'Natural gas', data: s.gas, borderColor: gas, borderWidth: 2, pointRadius: 0, yAxisID: 'g', fill: 'origin', backgroundColor: fade(gas, 0.25) },
+          {
+            label: 'Natural gas', data: s.gas, borderColor: gas, borderWidth: 2, yAxisID: 'g', fill: 'origin', backgroundColor: fade(gas, 0.25),
+            pointRadius: s.k.map((_, j) => (j === spikeAt ? 6 : 0)), pointBackgroundColor: gas, pointBorderColor: css('--surface'), pointBorderWidth: 2,
+          },
           { label: 'S&P 500', data: s.sp, borderColor: crash, borderWidth: 2, pointRadius: 0, yAxisID: 's' },
         ],
       },
@@ -227,62 +261,41 @@ function renderCases(scenarios, b) {
   });
 }
 
-// ── Figure 2: average gas path ───────────────────────────────────────────────
-function renderGasPath(path, b) {
-  const at21 = path.find((d) => d.k === -21);
-  $('path-lead').textContent =
-    `Averaged across the ${b.n} peaks, gas was ${pct(-at21.event)} higher at the top than a month earlier. ` +
-    `The direction is consistent, but the size of that average move is ${at21.event < at21.lo ? 'outside' : 'inside'} the range random dates produce: ${at21.event < at21.lo ? 'unusually large' : 'an ordinary month for gas'}.`;
+// ── Figure 2: spikes by window ───────────────────────────────────────────────
+function renderWindows(windows) {
+  const w1 = windows[0];
+  $('windows-lead').textContent =
+    `The closer to the peak, the more the pattern stands out: ${w1.spiked} of ${w1.n} crashes had a gas spike in the final week, against ${share(w1.spike_all)} of ordinary days (p = ${pv(w1.spike_p)}). ` +
+    'Widen the window to a month or two and the edge disappears, because gas spikes so often that most months contain one anyway.';
   const gas = css('--gas');
-  const line = (key, extra) => ({ data: path.map((d) => d[key]), borderWidth: 2, pointRadius: 0, ...extra });
-  const zero = { id: 'zero', beforeDatasetsDraw(chart) {
-    const { ctx, chartArea: a, scales: { x } } = chart;
-    const i0 = path.findIndex((d) => d.k === -21);
-    const i1 = path.findIndex((d) => d.k === 0);
-    ctx.save();
-    ctx.fillStyle = rgba(gas, 0.12);
-    ctx.fillRect(x.getPixelForValue(i0), a.top, x.getPixelForValue(i1) - x.getPixelForValue(i0), a.bottom - a.top);
-    ctx.strokeStyle = css('--crash');
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(x.getPixelForValue(i1), a.top); ctx.lineTo(x.getPixelForValue(i1), a.bottom); ctx.stroke();
-    ctx.fillStyle = css('--crash');
-    ctx.font = '600 11px Inter, system-ui, sans-serif';
-    ctx.fillText('S&P peak', x.getPixelForValue(i1) + 6, a.top + 12);
-    ctx.restore();
-  } };
-  new Chart($('gas-path'), {
-    type: 'line',
+  new Chart($('windows'), {
+    type: 'bar',
     data: {
-      labels: path.map((d) => d.k),
+      labels: windows.map((w) => WINDOW[w.window]),
       datasets: [
-        line('event', { label: 'Gas around a crash peak', borderColor: gas, borderWidth: 3 }),
-        line('all', { label: 'Any day', borderColor: css('--muted'), borderWidth: 1.5, borderDash: [5, 4] }),
-        line('lo', { borderColor: 'transparent', borderWidth: 0 }),
-        line('hi', { label: 'Random dates, 5–95%', borderColor: 'transparent', borderWidth: 0, fill: '-1', backgroundColor: css('--band') }),
+        { label: 'Before a crash peak', data: windows.map((w) => w.spike_pct), backgroundColor: gas, borderRadius: 6, maxBarThickness: 60 },
+        { label: 'Any day', data: windows.map((w) => w.spike_all), backgroundColor: css('--band'), borderColor: css('--muted'), borderWidth: 1, borderRadius: 6, maxBarThickness: 60 },
       ],
     },
     options: {
       animation: false,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { align: 'start', labels: { filter: (item) => item.datasetIndex !== 2, boxHeight: 8, boxWidth: 18 } },
-        tooltip: { filter: (c) => c.datasetIndex < 2, callbacks: { title: (items) => `Day ${fmt(+items[0].label, 0)}`, label: (c) => ` ${c.dataset.label}  ${pct(c.raw)}` } },
+        legend: { align: 'start', labels: { boxWidth: 12, boxHeight: 12 } },
+        tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${share(c.raw)}${c.datasetIndex === 0 ? ` (${windows[c.dataIndex].spiked} of ${windows[c.dataIndex].n}, p = ${pv(windows[c.dataIndex].spike_p)})` : ''}` } },
       },
       scales: {
-        x: { title: { display: true, text: 'Trading days from S&P peak' }, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false, callback: (v, i) => (path[i].k % 21 === 0 ? path[i].k : null) } },
-        y: { title: { display: true, text: 'Natural gas, % from peak day' }, ticks: { callback: (v) => `${v}%` }, grid: { color: (c) => (c.tick.value === 0 ? css('--muted') : css('--line')) } },
+        x: { title: { display: true, text: 'Window before the S&P peak' }, grid: { display: false } },
+        y: { beginAtZero: true, max: 100, title: { display: true, text: 'Had a 10%+ gas spike' }, ticks: { callback: (v) => `${v}%` } },
       },
     },
-    plugins: [zero],
   });
 }
 
 // ── Figure 3: calendar ───────────────────────────────────────────────────────
 function renderCalendar(monthly) {
   const up = css('--gas');
-  const down = css('--cool');
-  const color = (r) => (r == null ? 'transparent' : rgba(r >= 0 ? up : down, 0.08 + Math.min(Math.abs(r), 30) / 30 * 0.85));
+  const color = (r) => (r == null ? 'transparent' : rgba(up, 0.05 + Math.max(0, Math.min(r, 25)) / 25 * 0.9));
   const byYear = new Map();
   monthly.forEach((m) => {
     if (!byYear.has(m.y)) byYear.set(m.y, Array(12).fill(null));
@@ -292,18 +305,50 @@ function renderCalendar(monthly) {
   let html = '<span></span>' + names.map((n) => `<span class="h">${n}</span>`).join('');
   for (const [y, months] of byYear) {
     html += `<span class="y">${y}</span>` + months.map((m, i) => (m
-      ? `<span class="c${m.pre ? ' pre' : ''}" style="background:${color(m.r)}" title="${names[i] === 'M' ? '' : ''}${new Date(y, i).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: ${pct(m.r)}${m.pre ? ' · run-up or peak month' : ''}"></span>`
+      ? `<span class="c${m.pre ? ' pre' : ''}" style="background:${color(m.r)}" title="${new Date(y, i).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: biggest 5-day spike ${pct(m.r)}${m.pre ? ' · before or at a crash peak' : ''}"></span>`
       : '<span></span>')).join('');
   }
   $('calendar').innerHTML = html;
-  $('cal-scale').style.background = `linear-gradient(90deg, ${rgba(down, 0.93)}, ${rgba(down, 0.08)}, ${rgba(up, 0.08)}, ${rgba(up, 0.93)})`;
+  $('cal-scale').style.background = `linear-gradient(90deg, ${rgba(up, 0.05)}, ${rgba(up, 0.95)})`;
 }
 
-// ── Figure 4: scatter ────────────────────────────────────────────────────────
+// ── Figure 4: hedge ──────────────────────────────────────────────────────────
+function renderHedge(scenarios, h) {
+  $('hedge-lead').textContent =
+    `Gas rose during ${h.crash_up} of ${scenarios.length} declines. When it worked, it worked spectacularly: in 2022 gas more than doubled while the S&P 500 lost a quarter. ` +
+    `In the others (${scenarios.filter((s) => s.gas_dd <= 0).map((s) => s.peak.slice(0, 4)).join(', ')}) gas fell along with stocks, so the median decline saw gas ${pct(h.crash_median)}. ` +
+    `Across every month since 2001, when the S&P 500 fell 5% or more, gas was up ${share(h.bad_up)} of the time, about the same as any month (${share(h.all_up)}).`;
+  const gas = css('--gas');
+  const crash = css('--crash');
+  new Chart($('hedge'), {
+    type: 'bar',
+    data: {
+      labels: scenarios.map((s) => month(s.peak)),
+      datasets: [
+        { label: 'S&P 500, peak to low', data: scenarios.map((s) => s.depth), backgroundColor: rgba(crash, 0.8), borderRadius: 4, maxBarThickness: 34 },
+        { label: 'Natural gas, same days', data: scenarios.map((s) => s.gas_dd), backgroundColor: scenarios.map((s) => rgba(gas, s.gas_dd > 0 ? 0.95 : 0.45)), borderRadius: 4, maxBarThickness: 34 },
+      ],
+    },
+    options: {
+      animation: false,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { align: 'start', labels: { boxWidth: 12, boxHeight: 12 } },
+        tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${pct(c.raw)}` } },
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { type: 'linear', title: { display: true, text: 'Move from S&P peak to low' }, ticks: { callback: (v) => `${v}%` }, grid: { color: (c) => (c.tick.value === 0 ? css('--muted') : css('--line')) } },
+      },
+    },
+  });
+}
+
+// ── Figure 5: scatter ────────────────────────────────────────────────────────
 function renderScatter(scenarios, b) {
   $('scatter-lead').textContent =
-    `If gas were driving the damage, bigger rallies should come before deeper falls. They do not: r = ${fmt(b.r_depth, 2)} (p = ${pv(b.p_depth)}). ` +
-    'The deepest crash of the period, 2007–09, followed a modest rise; the largest rally, early 2025, came before one of the shallower declines.';
+    `If spikes were warnings of how bad things will get, bigger spikes would come before deeper falls. The correlation is r = ${fmt(b.r_depth, 2)} (p = ${pv(b.p_depth)}): no reliable link. ` +
+    'The deepest crash of the period, 2007–09, followed one of the larger spikes; the 2010 and 2011 declines followed small ones; early 2025 had the biggest spike and a mid-sized fall.';
   const labels = { id: 'labels', afterDatasetsDraw(chart) {
     const { ctx } = chart;
     ctx.save();
@@ -318,7 +363,7 @@ function renderScatter(scenarios, b) {
     type: 'bubble',
     data: {
       datasets: [{
-        data: scenarios.map((s) => ({ x: s.gas_1m, y: s.depth, r: 6 + Math.sqrt(s.days) * 1.3 })),
+        data: scenarios.map((s) => ({ x: s.spike_1m, y: s.depth, r: 6 + Math.sqrt(s.days) * 1.3 })),
         backgroundColor: scenarios.map((s) => rgba(s.bear ? crash : gas, 0.45)),
         borderColor: scenarios.map((s) => (s.bear ? crash : gas)),
         borderWidth: 1.5,
@@ -330,10 +375,10 @@ function renderScatter(scenarios, b) {
       layout: { padding: { right: 80, top: 10 } },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (c) => { const s = scenarios[c.dataIndex]; return ` ${month(s.peak)}: gas ${pct(s.gas_1m)}, S&P ${pct(s.depth)} over ${s.days} days`; } } },
+        tooltip: { callbacks: { label: (c) => { const s = scenarios[c.dataIndex]; return ` ${month(s.peak)}: spike ${pct(s.spike_1m)}, S&P ${pct(s.depth)} over ${s.days} days`; } } },
       },
       scales: {
-        x: { title: { display: true, text: 'Gas move in the month before the peak' }, ticks: { callback: (v) => `${v}%` }, grid: { color: (c) => (c.tick.value === 0 ? css('--muted') : css('--line')) } },
+        x: { title: { display: true, text: 'Biggest 5-day gas spike in the month before the peak' }, ticks: { callback: (v) => `${v}%` } },
         y: { title: { display: true, text: 'S&P 500 fall, peak to low' }, ticks: { callback: (v) => `${v}%` } },
       },
     },
@@ -341,14 +386,14 @@ function renderScatter(scenarios, b) {
   });
 }
 
-// ── Figure 5: real-time test ─────────────────────────────────────────────────
+// ── Figure 6: real-time test ─────────────────────────────────────────────────
 function renderForward(rows, all) {
   const top = rows[rows.length - 1];
   const best = Math.max(...rows.map((r) => r.hit));
   $('forward-lead').textContent =
-    'Crash peaks are only known afterwards. To be useful, a gas rally would have to raise the odds of a crash before it happens. ' +
-    `On a typical day, the odds of a 15%+ S&P fall within six months are ${share(all.hit)}. After a gas rally of ${bucketName(top)} they were ${share(top.hit)} (p = ${pv(top.hit_p)}). ` +
-    (best < all.hit * 1.5 ? 'No bucket comes close to doubling the base rate: a gas rally is not a crash warning.' : '');
+    'Crash peaks are only known afterwards. To be a usable warning, a gas spike would have to raise the odds of a crash before it happens. ' +
+    `On a typical day, the odds of a 15%+ S&P fall within six months are ${share(all.hit)}. After the past month's biggest spike reached ${bucketName(top)} they were ${share(top.hit)} (p = ${pv(top.hit_p)}). ` +
+    (best < all.hit * 1.5 ? 'Bigger spikes do not raise the odds: a single spike, on its own, is not a crash warning.' : '');
   const gas = css('--gas');
   const baseline = { id: 'baseline', afterDatasetsDraw(chart) {
     const { ctx, chartArea: a, scales: { y } } = chart;
@@ -386,7 +431,7 @@ function renderForward(rows, all) {
       maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${share(c.raw)} of ${rows[c.dataIndex].days.toLocaleString()} days (p = ${pv(rows[c.dataIndex].hit_p)})` } } },
       scales: {
-        x: { title: { display: true, text: 'Gas move over the past month' }, grid: { display: false } },
+        x: { title: { display: true, text: "Biggest 5-day gas spike over the past month" }, grid: { display: false } },
         y: { beginAtZero: true, suggestedMax: Math.ceil(best / 10) * 10 + 5, title: { display: true, text: 'Followed by a 15%+ fall in 6 months' }, ticks: { callback: (v) => `${v}%` } },
       },
     },
@@ -394,22 +439,22 @@ function renderForward(rows, all) {
   });
 }
 
-// ── Section 7 and today ──────────────────────────────────────────────────────
+// ── Section 8 and today ──────────────────────────────────────────────────────
 function renderScore(tests) {
   $('score').innerHTML = tests.map((t) => `<tr>
-    <td class="q">${t.q}</td>
+    <td class="q"><span class="label ${t.role === 'Hedge' ? 'neg' : 'gas'}" style="display:block;margin-bottom:4px">${t.role}</span>${t.q}</td>
     <td><span class="chip ${t.pass ? 'pass' : 'fail'}">${t.pass ? 'Supported' : 'Not supported'}</span></td>
     <td class="ev">${t.ev}</td>
   </tr>`).join('');
 }
 
 function renderToday(data) {
-  const { latest: l, forward: f, forward_all: all } = data;
+  const { latest: l, forward: f, forward_all: all, params } = data;
   const b = f[l.bucket];
   $('today').innerHTML = `
-    <div class="big ${l.gas_1m >= 0 ? 'gas' : ''}">${pct(l.gas_1m)}</div>
-    <p>Natural gas over the past month, to ${day(l.date)} ($${l.ng.toFixed(2)}). The S&amp;P 500 is ${pct(l.sp_off_high)} from its high.
-    Historically, after a gas move of ${bucketName(b)}, a 15%+ fall followed within six months ${share(b.hit)} of the time, against ${share(all.hit)} on all days.</p>`;
+    <div class="big ${l.spike_1m >= params.spike ? 'gas' : ''}">${pct(l.spike_1m)}</div>
+    <p>Biggest 5-day natural gas move of the past month, to ${day(l.date)} (gas at $${l.ng.toFixed(2)}). ${l.spike_1m >= params.spike ? 'That counts as a spike.' : 'No spike.'} The S&amp;P 500 is ${pct(l.sp_off_high)} from its high.
+    Historically, after a month like this, a 15%+ fall followed within six months ${share(b.hit)} of the time, against ${share(all.hit)} on all days.</p>`;
 }
 
 main().catch((e) => {

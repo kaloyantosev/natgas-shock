@@ -4,20 +4,22 @@ Natural Gas Shock Monitor: data pipeline
 Builds natgas_data.json from Yahoo Finance daily closes (NG=F, ^GSPC):
     pip install -r requirements.txt && python fetch_data.py
 
-The hypothesis: natural gas rallies in the month before the S&P 500 tops out
-ahead of a major decline (a fall of 15% or more). Tested two ways:
-  1. Backward: date every correction since 2001 and look at gas in the month
-     before each peak, against all days.
-  2. Forward: on every day, bucket the past-month gas move and see how often a
-     15%+ S&P fall followed within 6 months. Only this view is usable in real
-     time, because peaks are only known in hindsight.
+The hypothesis: in the days and weeks before the S&P 500 starts a major decline
+(a fall of 15% or more), natural gas spikes: a sharp burst up, wherever it lands
+in that window, not the net change over it. A spike is the largest 5-day gas
+gain inside the window. Tested two ways:
+  1. Backward: date every major decline since 2001 and look for spikes in the
+     week to two months before each peak, against all days.
+  2. Forward: on every day, bucket the biggest spike of the past month and see
+     how often a 15%+ S&P fall followed within 6 months. Only this view is
+     usable in real time, because peaks are only known in hindsight.
 
 Design rules
   * Roll-adjusted. NG=F is an unadjusted front-month series, so the day it
     switches contract shows the curve spread as a fake price move. Those daily
     returns are dropped.
-  * Fixed buckets (-10/0/10/20%), set before looking at outcomes, so no
-    full-sample quantiles leak the future into the forward test.
+  * Fixed thresholds (a spike is +10% in 5 days; buckets 5/10/15/20%), set as
+    round numbers, so no full-sample quantiles leak into the forward test.
   * Always against a baseline: every number sits next to the same number for
     all days.
   * p-values from circular shifts of the event dates, which keep clustering and
@@ -30,14 +32,16 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-RUNUP = 21                    # trading days of gas move before a peak (one month)
+BURST = 5                     # trading days in a spike
+SPIKE = 10.0                  # % gain in BURST days that counts as a spike
+LOOKBACKS = {"1w": 5, "2w": 10, "1m": 21, "2m": 42}
+RUNUP = 21                    # headline window before a peak (one month)
 FWD = 126                     # forward window for the real-time test (six months)
 CORRECTION = -15.0            # % S&P fall from a closing high that counts as a major decline
 REBOUND = 25.0                # % rally off a correction low that starts a new cycle
-BUCKETS = [-10, 0, 10, 20]    # past-month gas move, % edges
+BUCKETS = [5, 10, 15, 20]     # biggest spike of the past month, % edges
 START = 126                   # trading days of history before the sample starts
-WINDOW = (-63, 21)            # per-correction chart: days before peak, days after trough
-GAS_PATH = (-126, 63)         # average gas path around S&P peaks
+WINDOW = (-63, 21)            # per-crash chart: days before peak, days after trough
 OUT = "natgas_data.json"
 
 
@@ -110,24 +114,6 @@ def find_corrections(price, threshold):
     return out
 
 
-def event_path(level, events, start, k0, k1):
-    """Average change of `level` (log) from day 0 to day k around events, with a
-    5-95% band from circular shifts of the event dates."""
-    lo, hi = max(start, -k0), len(level) - k1
-    e = events[(events >= lo) & (events < hi)] - lo
-    n = hi - lo
-    idx = (e[None, :] + np.arange(n)[:, None]) % n
-    out = []
-    for k in range(k0, k1 + 1):
-        col = (level[lo + k:hi + k] - level[lo:hi]) * 100
-        null = col[idx].mean(axis=1)
-        out.append({
-            "k": k, "event": rnd(null[0]), "all": rnd(col.mean()),
-            "lo": rnd(np.percentile(null, 5)), "hi": rnd(np.percentile(null, 95)),
-        })
-    return out
-
-
 def rnd(x, n=2):
     return None if x is None or not np.isfinite(x) else round(float(x), n)
 
@@ -161,52 +147,92 @@ def main():
     g = np.cumsum(df["ret"].fillna(0).to_numpy())     # roll-adjusted log gas level
     sp = df["sp"].to_numpy()
 
-    gas1m = np.full(T, np.nan)
-    gas1m[RUNUP:] = (np.exp(g[RUNUP:] - g[:-RUNUP]) - 1) * 100
+    # burst[t] = gas gain over the BURST days ending at t; maxb[W][t] = biggest burst ending in (t-W, t].
+    burst = (np.exp(pd.Series(g).diff(BURST).to_numpy()) - 1) * 100
+    maxb = {name: pd.Series(burst).rolling(W).max().to_numpy() for name, W in LOOKBACKS.items()}
     low = pd.Series(sp).rolling(FWD).min().shift(-FWD).to_numpy()   # min close over t+1..t+FWD
     mdd = np.minimum((low / sp - 1) * 100, 0)
+    pctile = lambda x, name: float((maxb[name][START:] < x).mean() * 100)
 
-    # 1. Backward: gas in the month before every correction peak.
+    # 1. Backward: spikes in the windows before every major decline.
     corr = [c for c in find_corrections(sp, CORRECTION) if c[0] >= START]
     peaks = np.array([c[0] for c in corr], dtype=int)
-    rose = np.where(np.isnan(gas1m), np.nan, (gas1m > 0) * 100.0)
-    _, rose_p, _ = shift_test(rose, peaks, START, T)
-    _, mean_p, _ = shift_test(gas1m, peaks, START, T)
+    windows = []
+    for name, W in LOOKBACKS.items():
+        m = maxb[name]
+        spiked = np.where(np.isnan(m), np.nan, (m >= SPIKE) * 100.0)
+        _, p_spike, _ = shift_test(spiked, peaks, START, T)
+        _, p_size, _ = shift_test(np.nan_to_num(m), peaks, START, T)
+        windows.append({
+            "window": name, "days": W, "n": len(peaks),
+            "spiked": int((m[peaks] >= SPIKE).sum()),
+            "spike_pct": rnd(spiked[peaks].mean(), 0), "spike_all": rnd(np.nanmean(spiked[START:]), 0), "spike_p": rnd(p_spike, 3),
+            "max_median": rnd(np.median(m[peaks]), 1), "max_all_median": rnd(np.nanmedian(m[START:]), 1),
+            "pctile_median": rnd(np.median([pctile(m[p], name) for p in peaks]), 0), "size_p": rnd(p_size, 3),
+        })
+
     k0, k1 = WINDOW
     scenarios = []
     for pk, tr, depth in corr:
         end = min(tr + k1, T - 1)
         ks = list(range(k0, end - pk + 1))
-        base = g[pk - RUNUP]
-        scenarios.append({
+        base = g[pk + k0]
+        top = pk - RUNUP + 1 + int(np.nanargmax(burst[pk - RUNUP + 1:pk + 1]))   # end of the month's biggest burst
+        row = {
             "peak": ds(pk), "trough": ds(tr), "depth": rnd(depth, 1), "days": int(tr - pk),
-            "bear": bool(depth <= -20), "gas_1m": rnd(gas1m[pk], 1),
-            "gas_3m": rnd((np.exp(g[pk] - g[pk - 63]) - 1) * 100, 1),
-            "ng_peak": rnd(df["ng"].iloc[pk], 2),
-            "pctile": rnd((gas1m[START:] < gas1m[pk]).mean() * 100 if np.isfinite(gas1m[pk]) else np.nan, 0),
+            "bear": bool(depth <= -20), "ng_peak": rnd(df["ng"].iloc[pk], 2),
+            "spike_end": int(top - pk), "spike_date": ds(top),
+            "pctile": rnd(pctile(maxb["1m"][pk], "1m"), 0),
             "k": ks,
-            "gas": [rnd((np.exp(g[pk + k] - base) - 1) * 100, 1) for k in ks],   # % from day -21
+            "gas": [rnd((np.exp(g[pk + k] - base) - 1) * 100, 1) for k in ks],   # % from day -63
             "sp": [rnd((sp[pk + k] / sp[pk] - 1) * 100, 1) for k in ks],         # % from the peak
-        })
-    x = [s["gas_1m"] for s in scenarios]
+        }
+        for name in LOOKBACKS:
+            row[f"spike_{name}"] = rnd(maxb[name][pk], 1)
+        scenarios.append(row)
+    # Hedge: gas over each decline, peak to low, against random windows of the same lengths.
+    lens = np.array([c[1] - c[0] for c in corr])
+    gas_dd = (np.exp(g[peaks + lens] - g[peaks]) - 1) * 100
+    n_sh = T - START - lens.max()
+    null = np.array([((np.exp(g[(peaks - START + k) % n_sh + START + lens] - g[(peaks - START + k) % n_sh + START]) - 1) * 100).mean()
+                     for k in range(n_sh)])
+    hedge_p = float((np.abs(null - null.mean()) >= abs(gas_dd.mean() - null.mean()) - 1e-12).mean())
+    for row, v in zip(scenarios, gas_dd):
+        row["gas_dd"] = rnd(v, 1)
+    # Hedge, every month: gas over 21-day windows in which the S&P fell 5% or more.
+    sp21 = np.full(T, np.nan)
+    sp21[21:] = (sp[21:] / sp[:-21] - 1) * 100
+    gas21 = np.full(T, np.nan)
+    gas21[21:] = (np.exp(g[21:] - g[:-21]) - 1) * 100
+    bad = np.flatnonzero(sp21 <= -5)
+    bad = bad[bad >= START]
+    _, bad_p, _ = shift_test(np.nan_to_num(gas21), bad, START, T)
+    up = np.where(np.isnan(gas21), np.nan, (gas21 > 0) * 100.0)
+    _, bad_up_p, _ = shift_test(up, bad, START, T)
+    ok = np.isfinite(sp21) & np.isfinite(gas21)
+    hedge = {
+        "crash_up": int((gas_dd > 0).sum()), "crash_mean": rnd(gas_dd.mean(), 1), "crash_median": rnd(np.median(gas_dd), 1),
+        "crash_null": rnd(null.mean(), 1), "crash_p": rnd(hedge_p, 3),
+        "bad_months": int(len(bad)), "bad_gas": rnd(np.nanmean(gas21[bad]), 1), "all_gas": rnd(np.nanmean(gas21[START:]), 1),
+        "bad_p": rnd(bad_p, 3), "bad_up": rnd(up[bad].mean(), 0), "all_up": rnd(np.nanmean(up[START:]), 0), "bad_up_p": rnd(bad_up_p, 3),
+        "corr_daily": rnd(np.corrcoef(np.diff(g)[START:], np.diff(np.log(sp))[START:])[0, 1]),
+        "corr_monthly": rnd(np.corrcoef(gas21[ok][::21], sp21[ok][::21])[0, 1]),
+    }
+
+    x = [s["spike_1m"] for s in scenarios]
     r, p_r, rho, p_rho = perm_corr(x, [s["depth"] for s in scenarios])
     r_d, p_d, _, _ = perm_corr(x, [s["days"] for s in scenarios])
-    e = peaks
     backward = {
-        "n": len(peaks), "rose": int((gas1m[e] > 0).sum()),
-        "rose_pct": rnd(rose[e].mean(), 0), "rose_all": rnd(np.nanmean(rose[START:]), 0), "rose_p": rnd(rose_p, 3),
-        "gas_mean": rnd(gas1m[e].mean(), 1), "gas_median": rnd(np.median(gas1m[e]), 1),
-        "gas_all": rnd(np.nanmean(gas1m[START:]), 1), "gas_p": rnd(mean_p, 3),
-        "depth_mean": rnd(np.mean([c[2] for c in corr]), 1),
+        "n": len(peaks), "depth_mean": rnd(np.mean([c[2] for c in corr]), 1),
         "days_median": int(np.median([c[1] - c[0] for c in corr])),
         "r_depth": rnd(r), "p_depth": rnd(p_r, 3), "rho_depth": rnd(rho), "p_rho_depth": rnd(p_rho, 3),
         "r_days": rnd(r_d), "p_days": rnd(p_d, 3),
     }
 
-    # 2. Forward: after a given past-month gas move, how often did a 10%+ fall follow?
+    # 2. Forward: after a spike of a given size in the past month, how often did a 15%+ fall follow?
     hi = T - FWD
     days = np.arange(START, hi)
-    b = np.digitize(gas1m, BUCKETS)
+    b = np.digitize(maxb["1m"], BUCKETS)
     hit = (mdd <= CORRECTION) * 100.0
     edges = [None] + BUCKETS + [None]
     forward = []
@@ -221,28 +247,30 @@ def main():
         })
     forward_all = {"hit": rnd(hit[days].mean(), 1), "mdd": rnd(mdd[days].mean(), 1)}
 
-    # Calendar of roll-adjusted monthly gas moves, with the month before each peak flagged.
-    lvl = pd.Series(g, index=dates)
-    m_end = lvl.groupby([dates.year, dates.month]).last()
-    m_ret = (np.exp(m_end.diff()) - 1) * 100
+    # Calendar: biggest 5-day spike in each month, with run-up and peak months flagged.
+    s_b = pd.Series(burst, index=dates)
+    m_max = s_b.groupby([dates.year, dates.month]).max()
     flag = {(dates[pk - RUNUP].year, dates[pk - RUNUP].month) for pk in peaks} | {(dates[pk].year, dates[pk].month) for pk in peaks}
     monthly = [{"y": int(y), "m": int(m), "r": rnd(v, 1), "pre": (y, m) in flag}
-               for (y, m), v in m_ret.items() if y >= dates[START].year]
+               for (y, m), v in m_max.items() if y >= dates[START].year]
 
     out = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "params": {"runup": RUNUP, "fwd": FWD, "correction": CORRECTION, "rebound": REBOUND, "buckets": BUCKETS},
+        "params": {"burst": BURST, "spike": SPIKE, "runup": RUNUP, "fwd": FWD, "correction": CORRECTION,
+                   "rebound": REBOUND, "buckets": BUCKETS,
+                   "spike_share": rnd(np.nanmean(burst[START:] >= SPIKE) * 100, 1)},
         "latest": {
-            "date": ds(T - 1), "ng": rnd(df["ng"].iloc[-1], 3), "gas_1m": rnd(gas1m[-1], 1),
+            "date": ds(T - 1), "ng": rnd(df["ng"].iloc[-1], 3), "spike_1m": rnd(maxb["1m"][-1], 1),
             "bucket": int(b[-1]), "sp_off_high": rnd((sp[-1] / sp.max() - 1) * 100, 1),
         },
         "sample_start": ds(START),
         "backward": backward,
+        "hedge": hedge,
+        "windows": windows,
         "scenarios": scenarios,
-        "gas_path": event_path(g, peaks, START, *GAS_PATH),
         "forward": forward,
-        "monthly": monthly,
         "forward_all": forward_all,
+        "monthly": monthly,
         "series": {
             "dates": [d.strftime("%Y-%m-%d") for d in dates],
             "ng": [rnd(v, 3) for v in df["ng"]],
@@ -252,11 +280,14 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
 
-    print(f"{len(peaks)} corrections; gas rose in the month before {backward['rose']} "
-          f"({backward['rose_pct']}% vs {backward['rose_all']}% of all days, p={backward['rose_p']})")
-    print(f"  run-up vs depth: r={backward['r_depth']} (p={backward['p_depth']})")
+    print(f"{len(peaks)} major declines")
+    for w in windows:
+        print(f"  {w['window']}: spike before {w['spiked']}/{w['n']} ({w['spike_pct']}% vs {w['spike_all']}% all days, p={w['spike_p']}); "
+              f"median pctile {w['pctile_median']} (p={w['size_p']})")
+    print("  hedge:", hedge, [r["gas_dd"] for r in scenarios])
+    print(f"  spike size vs depth: r={backward['r_depth']} (p={backward['p_depth']})")
     for f_ in forward:
-        print(f"  gas 1m {f_['lo']}..{f_['hi']}: {f_['days']} days, hit {f_['hit']}% (p={f_['hit_p']})")
+        print(f"  spike {f_['lo']}..{f_['hi']}: {f_['days']} days, hit {f_['hit']}% (p={f_['hit_p']})")
 
 
 def self_check():

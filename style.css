@@ -168,3 +168,10 @@ table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
   .today { grid-template-columns: 1fr; }
   .cal { grid-template-columns: 34px repeat(12, 1fr); font-size: 9px; }
 }
+
+.roles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 24px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 18px; }
+.role h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 10px; }
+.role p { margin: 0 0 10px; font-size: 15px; }
+.fig + .fig { margin-top: 18px; }
+@media (max-width: 860px) { .roles { grid-template-columns: 1fr; } }

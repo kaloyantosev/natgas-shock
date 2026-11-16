@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Natural Gas Shock Monitor</title>
-  <meta name="description" content="Research: does natural gas rally before the S&amp;P 500's major crashes? Every 15%+ decline since 2001, tested against a baseline.">
+  <meta name="description" content="Research: can natural gas act as both a hedge and an early warning for the S&amp;P 500's major crashes? Every 15%+ decline since 2001, tested against a baseline.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -22,8 +22,8 @@
   <main class="wrap">
     <div class="title-block">
       <p class="kicker">Working paper · Commodities &amp; equity risk</p>
-      <h1>Does natural gas <em>warn</em> before the market breaks?</h1>
-      <p class="dek">A test of one idea: that Henry Hub natural gas rallies in the month before the S&amp;P 500 tops out ahead of its biggest falls. Every major decline since 2001, measured against what gas does on an ordinary day.</p>
+      <h1>Natural gas: a <em>hedge</em> and an <em>early warning</em> for stocks?</h1>
+      <p class="dek">The idea has two parts. As a <b>leading indicator</b>, natural gas spikes in the days and weeks before the S&amp;P 500 breaks. As a <b>hedge</b>, it moves against the trend: when stocks fall, gas goes up. This paper tests both on every major decline since 2001.</p>
       <div class="byline" id="byline"></div>
     </div>
 
@@ -37,71 +37,95 @@
     </div>
 
     <section>
-      <p class="sec-num">1 · The record</p>
+      <p class="sec-num">1 · The two roles</p>
+      <h2>What each role would look like</h2>
+      <div class="roles">
+        <div class="role">
+          <p class="label gas">Leading indicator</p>
+          <h3>Gas spikes before stocks fall</h3>
+          <p class="muted">A sharp burst up in gas, a 10%+ gain within five trading days, somewhere in the week to two months before the S&amp;P 500 peaks. It is the spike that matters, not where gas ends the month: a burst that fades still counts.</p>
+          <p id="role-lead"></p>
+        </div>
+        <div class="role">
+          <p class="label neg">Hedge</p>
+          <h3>Gas rises while stocks fall</h3>
+          <p class="muted">From the S&amp;P 500's peak to its low, gas goes the other way. Holding gas would then offset part of the loss on stocks, the way gold or Treasuries sometimes do.</p>
+          <p id="role-hedge"></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="sec-num">2 · The record</p>
       <h2>Twenty-five years of gas and stocks</h2>
-      <div class="prose"><p class="muted">The natural gas price above, the S&amp;P 500 below, both on log scales. Red bands mark every major decline (15% or more from a high) from peak to low; the amber strip before each band is the month the hypothesis is about.</p></div>
+      <div class="prose"><p class="muted">The natural gas price above, the S&amp;P 500 below, both on log scales. Red bands mark every major decline (15% or more from a high) from peak to low; the amber strip before each band is the month in which a warning spike would appear. Inside the red bands, a rising gas line is the hedge at work.</p></div>
       <figure class="fig">
         <div class="legend" id="legend-timeline"></div>
-        <div class="fig-box tall"><canvas id="timeline" aria-label="S&amp;P 500 and natural gas since 2001 with major declines shaded"></canvas></div>
+        <div class="fig-box tall"><canvas id="timeline" aria-label="Natural gas and S&amp;P 500 since 2001 with major declines shaded"></canvas></div>
         <figcaption><b>Figure 1.</b> Henry Hub front-month natural gas price (top) and S&amp;P 500 (bottom), both on log scales. Shading: major declines, peak to low.</figcaption>
       </figure>
     </section>
 
     <section>
-      <p class="sec-num">2 · Seven crashes</p>
-      <h2>What gas did before each one</h2>
+      <p class="sec-num">3 · Seven crashes</p>
+      <h2>Spike before, hedge during</h2>
       <div class="prose"><p class="muted" id="cases-lead"></p></div>
       <div class="legend" style="margin-top:20px">
-        <span><i style="background:var(--gas)"></i>Natural gas, % from one month before the peak</span>
+        <span><i style="background:var(--gas)"></i>Natural gas, % from three months before the peak</span>
         <span><i style="background:var(--crash)"></i>S&amp;P 500, % from the peak</span>
         <span><i class="box" style="background:var(--gas-soft)"></i>The month before the peak</span>
+        <span><i class="box" style="background:var(--gas);border-radius:50%"></i>Biggest 5-day gas spike that month</span>
       </div>
       <div class="cases" id="cases"></div>
     </section>
 
     <section>
-      <p class="sec-num">3 · The pattern</p>
-      <h2>On average, gas drifts up into the top</h2>
-      <div class="prose"><p class="muted" id="path-lead"></p></div>
+      <p class="sec-num">4 · Leading indicator</p>
+      <h2>How often did gas spike before a crash?</h2>
+      <div class="prose"><p class="muted" id="windows-lead"></p></div>
       <figure class="fig">
-        <div class="fig-box"><canvas id="gas-path" aria-label="Average natural gas path around S&amp;P 500 peaks"></canvas></div>
-        <figcaption><b>Figure 2.</b> Average natural gas move around the seven peaks (day 0), relative to day 0, so a line below zero on the left means gas rose into the peak. Grey band: the 5–95% range of the same average for randomly shifted dates. Outside the band is unusual; inside is noise.</figcaption>
+        <div class="fig-box short"><canvas id="windows" aria-label="Share of crashes preceded by a gas spike, against all days, by window"></canvas></div>
+        <figcaption><b>Figure 2.</b> Share of the seven crash peaks with a gas spike (10%+ in 5 days) in the window before them, against the share of all trading days with a spike in the same window. A leading indicator needs the first bar clearly above the second.</figcaption>
       </figure>
-    </section>
-
-    <section>
-      <p class="sec-num">4 · The calendar</p>
-      <h2>Every month of gas since 2001</h2>
-      <div class="prose"><p class="muted">Each cell is one month's roll-adjusted gas move. Outlined cells are the run-up month before a major peak and the month of the peak itself. If the hypothesis were a usable signal, the outlined cells would stand out from their neighbours.</p></div>
       <figure class="fig">
         <div class="cal" id="calendar"></div>
-        <div class="scale"><span>−30%</span><span class="bar" id="cal-scale"></span><span>+30%</span><span style="margin-left:14px"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;outline:2px solid var(--crash);outline-offset:-1px;vertical-align:-2px"></i> run-up and peak months</span></div>
-        <figcaption><b>Figure 3.</b> Monthly natural gas returns, roll-adjusted, January 2001 to today.</figcaption>
+        <div class="scale"><span>0%</span><span class="bar" id="cal-scale"></span><span>+25%</span><span style="margin-left:14px"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;outline:2px solid var(--crash);outline-offset:-1px;vertical-align:-2px"></i> month before a crash peak, and the peak month</span></div>
+        <figcaption><b>Figure 3.</b> The biggest 5-day gas spike in every month since 2001. If spikes warned of crashes, the outlined months would be the brightest; instead bright months are spread through the whole record.</figcaption>
       </figure>
     </section>
 
     <section>
-      <p class="sec-num">5 · Size</p>
-      <h2>A bigger rally does not mean a bigger crash</h2>
+      <p class="sec-num">5 · Hedge</p>
+      <h2>What gas did while stocks fell</h2>
+      <div class="prose"><p class="muted" id="hedge-lead"></p></div>
+      <figure class="fig">
+        <div class="fig-box"><canvas id="hedge" aria-label="Gas and S&amp;P 500 moves from peak to low in each major decline"></canvas></div>
+        <figcaption><b>Figure 4.</b> Move from the S&amp;P 500 peak to its low in each decline: the S&amp;P 500 (red) and natural gas over the same days (amber). An amber bar pointing up is a decline in which gas worked as a hedge.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <p class="sec-num">6 · Size</p>
+      <h2>Does a bigger spike mean a bigger crash?</h2>
       <div class="prose"><p class="muted" id="scatter-lead"></p></div>
       <figure class="fig">
-        <div class="fig-box"><canvas id="scatter" aria-label="Gas move before each peak against the depth of the S&amp;P fall"></canvas></div>
-        <figcaption><b>Figure 4.</b> Gas move in the month before each peak against the S&amp;P 500 fall that followed. Bubble size: trading days from peak to low.</figcaption>
+        <div class="fig-box"><canvas id="scatter" aria-label="Biggest gas spike before each peak against the depth of the S&amp;P fall"></canvas></div>
+        <figcaption><b>Figure 5.</b> Biggest 5-day gas spike in the month before each peak against the S&amp;P 500 fall that followed. Bubble size: trading days from peak to low.</figcaption>
       </figure>
     </section>
 
     <section>
-      <p class="sec-num">6 · Real time</p>
-      <h2>Could you have used it?</h2>
+      <p class="sec-num">7 · Real time</p>
+      <h2>Could you have traded the warning?</h2>
       <div class="prose"><p class="muted" id="forward-lead"></p></div>
       <figure class="fig">
-        <div class="fig-box short"><canvas id="forward" aria-label="Share of days followed by a 15% S&amp;P fall within 6 months, by past-month gas move"></canvas></div>
-        <figcaption><b>Figure 5.</b> Share of trading days followed by a 15%+ S&amp;P 500 fall within 6 months, grouped by the gas move over the month before. Dashed line: all days. A warning signal would show rising bars on the right.</figcaption>
+        <div class="fig-box short"><canvas id="forward" aria-label="Share of days followed by a 15% S&amp;P fall within 6 months, by size of the past month's biggest gas spike"></canvas></div>
+        <figcaption><b>Figure 6.</b> Share of trading days followed by a 15%+ S&amp;P 500 fall within 6 months, grouped by the biggest 5-day gas spike over the month before. Dashed line: all days. A warning signal would show rising bars on the right.</figcaption>
       </figure>
     </section>
 
     <section>
-      <p class="sec-num">7 · Verdict</p>
+      <p class="sec-num">8 · Verdict</p>
       <h2>What the evidence supports</h2>
       <table class="score" id="score"></table>
     </section>
@@ -116,9 +140,10 @@
       <details>
         <summary>Definitions</summary>
         <ol>
-          <li><b>Major decline</b> = S&amp;P 500 close at least 15% below a closing high (20%+ = bear market). An episode ends at a new high or after a 25% rally off its low, so the 2010 and 2011 declines, which happened below the 2007 high, count separately.</li>
-          <li><b>Gas run-up</b> = Henry Hub front-month (NG=F) move over the 21 trading days to the S&amp;P peak. Roll-adjusted: the day the series switches contract is dropped, because the gap between two contracts is not a price move.</li>
-          <li><b>Real-time test</b> uses fixed buckets (−10/0/+10/+20%) set before looking at results, and a 6-month horizon, so nothing from the future goes into it.</li>
+          <li><b>Major decline</b> = S&amp;P 500 close at least 15% below a closing high (20%+ = bear market). An episode ends at a new high or after a 25% rally off its low, so the 2010 and 2011 declines, which happened below the 2007 high, count separately. Windows are measured back from the peak, the last close before the decline.</li>
+          <li><b>Spike</b> = a gain of 10% or more in Henry Hub front-month gas (NG=F) over 5 trading days, ending anywhere in the window. About one 5-day period in fourteen qualifies. Prices are roll-adjusted: the day the series switches contract is dropped, because the gap between two contracts is not a price move.</li>
+          <li><b>Hedge</b> = gas move over the same days as the S&amp;P 500's fall from peak to low, against random windows of the same lengths; and gas over every 21-day window in which the S&amp;P fell 5% or more.</li>
+          <li><b>Real-time test</b> uses fixed buckets (5/10/15/20%) and a 6-month horizon, so nothing from the future goes into it.</li>
           <li><b>p-values</b> come from circular shifts of the event dates, which keep clustering and overlapping windows intact; correlations from permutation tests.</li>
         </ol>
       </details>
@@ -126,8 +151,8 @@
         <summary>Limitations</summary>
         <ul>
           <li>Seven declines is a very small sample. Several statistics are tested here, so any single p-value near 0.05 is weak evidence.</li>
-          <li>Peaks are dated with hindsight. Only the real-time test (section 6) reflects what an investor could have known.</li>
-          <li>Stocks rally into a peak, and commodities tend to rise in the same risk-on mood. Gas rising beforehand may be a symptom of the late-cycle rally, not a cause of the fall.</li>
+          <li>Peaks are dated with hindsight. Only the real-time test reflects what an investor could have known.</li>
+          <li>One episode dominates the hedge: in 2022 gas more than doubled while stocks fell, driven by the war in Ukraine. Averages that include it look far better than the typical decline.</li>
           <li>The sample starts in 2001, so the 2000–2002 bear market is not covered. Henry Hub is a US price; European gas (TTF) is not covered.</li>
         </ul>
       </details>
