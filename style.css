@@ -77,14 +77,12 @@ h1 em { font-style: normal; color: var(--accent); }
 .byline { margin-top: 12px; font-size: 14px; color: var(--muted); display: flex; gap: 6px 16px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .byline b { color: var(--fg); font-weight: 500; }
 
-.abstract { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; margin-top: 24px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.abstract { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 24px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .label { font-size: 12px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 .abstract p { margin: 0; font-size: 14px; }
 .verdict { font-size: 17px !important; font-weight: 600; line-height: 1.4; margin: 0 0 8px !important; }
-.abstract-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.record { margin: 0; flex: 1; display: flex; flex-direction: column; }
+.record { margin-top: 24px; }
 .record .label { margin-bottom: 4px; }
-.record-box { position: relative; flex: 1; min-height: 240px; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; align-self: start; }
 .stats div { background: var(--surface); padding: 14px 16px; }
 .stats b { display: block; white-space: nowrap; font-family: var(--mono); font-size: 24px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -164,7 +162,6 @@ figcaption b { color: var(--fg); font-weight: 600; }
 
 @media (max-width: 860px) {
   .abstract { grid-template-columns: 1fr; gap: 16px; }
-  .record-box { min-height: 280px; }
   .roles, .cases { grid-template-columns: 1fr; }
   .fig-box, .fig-box.tall { height: 300px; }
   .stats b { font-size: 20px; }
