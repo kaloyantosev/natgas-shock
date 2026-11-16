@@ -28,7 +28,7 @@ Gas looks more like an independent risk that occasionally pays off in a crisis (
 - **Forward test:** on every day, the past month's biggest spike in fixed buckets (5/10/15/20%) against how often a 15%+ fall followed within 6 months. Fixed buckets keep the future out.
 - **Inference:** p-values from circular shifts of the event dates, correlations from permutation tests.
 
-The site is laid out as a short paper: the 25-year record, one chart per crash, the average gas path into the peaks, a calendar of every month, run-up size against crash depth, the real-time test, and a verdict table. All text is computed from the data.
+The site is laid out as a short paper: the two roles, the 25-year record, one chart per crash (spike before, hedge during), spikes by window, a calendar of the biggest spike in every month, gas during each decline, spike size against crash depth, the real-time test, and a verdict table. All text is computed from the data.
 
 ## Run
 
