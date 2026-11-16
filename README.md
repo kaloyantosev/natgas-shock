@@ -1,23 +1,26 @@
 # Natural Gas Shock Monitor
 
-Hypothesis: natural gas rallies in the month before the S&P 500 tops out ahead of a correction (a fall of 10% or more). The site tests it on every correction since 2001 and shows where gas stands today.
+A research page on one hypothesis: Henry Hub natural gas rallies in the month before the S&P 500 tops out ahead of its biggest falls (15% or more). Every major decline since 2001, measured against what gas does on an ordinary day.
 
 ## Findings so far
 
-- **Direction holds:** gas rose in the month before 9 of the 10 corrections since 2001, against 44% of all months (p = 0.004).
-- **Size does not:** only 5 of those run-ups exceeded 5%, and the size of the run-up has no correlation with how deep the fall was (r = 0.07) or how long it took.
-- **In real time:** after gas gained 20%+ in a month, a 10%+ S&P fall followed within 3 months 27% of the time, against 16% for all days (p = 0.05). Smaller moves told you nothing.
+| Test | Result |
+|---|---|
+| Gas rose in the month before every major decline | **Supported:** 7 of 7, against 44% of all months (p = 0.002) |
+| The rallies were unusually large | Not supported: median +3.3% (p = 0.21) |
+| A bigger rally means a deeper crash | Not supported: r = 0.02 |
+| A gas rally warns of a crash in real time | Not supported: 20% vs 16% base rate after a 20%+ monthly gain (p = 0.46) |
 
-Ten corrections and several tests make this a lead, not proof. Stocks rally into a peak, and commodities tend to rise in the same risk-on mood.
+Gas does rise before major crashes, but not by enough to warn you. The likeliest reading: gas rallies with everything else late in a bull market.
 
 ## Model
 
-- **Corrections:** S&P 500 closes 10%+ below a closing high. An episode ends at a new high or after a 25% rally off its low, so corrections inside a long bear count too.
+- **Major declines:** S&P 500 closes 15%+ below a closing high. An episode ends at a new high or after a 25% rally off its low, so corrections inside a long bear count too.
 - **Gas run-up:** front-month Henry Hub (NG=F) over the 21 trading days to the peak, roll-adjusted (the day the series switches contract is dropped).
-- **Forward test:** on every day, the past-month gas move in fixed buckets (−10/0/+10/+20%) against how often a 10%+ fall followed within 3 months. Fixed buckets keep the future out.
+- **Forward test:** on every day, the past-month gas move in fixed buckets (−10/0/+10/+20%) against how often a 15%+ fall followed within 6 months. Fixed buckets keep the future out.
 - **Inference:** p-values from circular shifts of the event dates, correlations from permutation tests.
 
-The site shows today's reading, the forward test, the average gas path into S&P peaks, one chart per correction, and the run-up against the depth of each fall.
+The site is laid out as a short paper: the 25-year record, one chart per crash, the average gas path into the peaks, a calendar of every month, run-up size against crash depth, the real-time test, and a verdict table. All text is computed from the data.
 
 ## Run
 

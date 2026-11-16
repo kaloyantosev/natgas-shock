@@ -5,11 +5,11 @@ Builds natgas_data.json from Yahoo Finance daily closes (NG=F, ^GSPC):
     pip install -r requirements.txt && python fetch_data.py
 
 The hypothesis: natural gas rallies in the month before the S&P 500 tops out
-ahead of a correction (a fall of 10% or more). Tested two ways:
+ahead of a major decline (a fall of 15% or more). Tested two ways:
   1. Backward: date every correction since 2001 and look at gas in the month
      before each peak, against all days.
   2. Forward: on every day, bucket the past-month gas move and see how often a
-     10%+ S&P fall followed within 3 months. Only this view is usable in real
+     15%+ S&P fall followed within 6 months. Only this view is usable in real
      time, because peaks are only known in hindsight.
 
 Design rules
@@ -31,8 +31,8 @@ import numpy as np
 import pandas as pd
 
 RUNUP = 21                    # trading days of gas move before a peak (one month)
-FWD = 63                      # forward window for the real-time test (three months)
-CORRECTION = -10.0            # % S&P fall from a closing high that counts as a correction
+FWD = 126                     # forward window for the real-time test (six months)
+CORRECTION = -15.0            # % S&P fall from a closing high that counts as a major decline
 REBOUND = 25.0                # % rally off a correction low that starts a new cycle
 BUCKETS = [-10, 0, 10, 20]    # past-month gas move, % edges
 START = 126                   # trading days of history before the sample starts
@@ -183,6 +183,7 @@ def main():
             "bear": bool(depth <= -20), "gas_1m": rnd(gas1m[pk], 1),
             "gas_3m": rnd((np.exp(g[pk] - g[pk - 63]) - 1) * 100, 1),
             "ng_peak": rnd(df["ng"].iloc[pk], 2),
+            "pctile": rnd((gas1m[START:] < gas1m[pk]).mean() * 100 if np.isfinite(gas1m[pk]) else np.nan, 0),
             "k": ks,
             "gas": [rnd((np.exp(g[pk + k] - base) - 1) * 100, 1) for k in ks],   # % from day -21
             "sp": [rnd((sp[pk + k] / sp[pk] - 1) * 100, 1) for k in ks],         # % from the peak
@@ -206,19 +207,27 @@ def main():
     hi = T - FWD
     days = np.arange(START, hi)
     b = np.digitize(gas1m, BUCKETS)
-    dd10 = (mdd <= CORRECTION) * 100.0
+    hit = (mdd <= CORRECTION) * 100.0
     edges = [None] + BUCKETS + [None]
     forward = []
     for i in range(len(BUCKETS) + 1):
         idx = days[b[days] == i]
-        _, p, _ = shift_test(dd10, idx, START, hi)
+        _, p, _ = shift_test(hit, idx, START, hi)
         forward.append({
             "lo": edges[i], "hi": edges[i + 1], "days": int(len(idx)),
             "share": rnd(len(idx) / len(days) * 100, 0),
-            "dd10": rnd(dd10[idx].mean(), 1), "dd10_p": rnd(p, 3),
+            "hit": rnd(hit[idx].mean(), 1), "hit_p": rnd(p, 3),
             "mdd": rnd(mdd[idx].mean(), 1),
         })
-    forward_all = {"dd10": rnd(dd10[days].mean(), 1), "mdd": rnd(mdd[days].mean(), 1)}
+    forward_all = {"hit": rnd(hit[days].mean(), 1), "mdd": rnd(mdd[days].mean(), 1)}
+
+    # Calendar of roll-adjusted monthly gas moves, with the month before each peak flagged.
+    lvl = pd.Series(g, index=dates)
+    m_end = lvl.groupby([dates.year, dates.month]).last()
+    m_ret = (np.exp(m_end.diff()) - 1) * 100
+    flag = {(dates[pk - RUNUP].year, dates[pk - RUNUP].month) for pk in peaks} | {(dates[pk].year, dates[pk].month) for pk in peaks}
+    monthly = [{"y": int(y), "m": int(m), "r": rnd(v, 1), "pre": (y, m) in flag}
+               for (y, m), v in m_ret.items() if y >= dates[START].year]
 
     out = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -232,6 +241,7 @@ def main():
         "scenarios": scenarios,
         "gas_path": event_path(g, peaks, START, *GAS_PATH),
         "forward": forward,
+        "monthly": monthly,
         "forward_all": forward_all,
         "series": {
             "dates": [d.strftime("%Y-%m-%d") for d in dates],
@@ -246,7 +256,7 @@ def main():
           f"({backward['rose_pct']}% vs {backward['rose_all']}% of all days, p={backward['rose_p']})")
     print(f"  run-up vs depth: r={backward['r_depth']} (p={backward['p_depth']})")
     for f_ in forward:
-        print(f"  gas 1m {f_['lo']}..{f_['hi']}: {f_['days']} days, 10% fall within 3m {f_['dd10']}% (p={f_['dd10_p']})")
+        print(f"  gas 1m {f_['lo']}..{f_['hi']}: {f_['days']} days, hit {f_['hit']}% (p={f_['hit_p']})")
 
 
 def self_check():

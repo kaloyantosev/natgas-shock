@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Natural Gas Shock Monitor</title>
-  <meta name="description" content="Does natural gas rally in the month before the S&amp;P 500 tops out? Every correction since 2001, tested against a baseline.">
+  <meta name="description" content="Research: does natural gas rally before the S&amp;P 500's major crashes? Every 15%+ decline since 2001, tested against a baseline.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -12,87 +15,128 @@
   <header class="top">
     <div class="wrap top-row">
       <span class="brand">Natural Gas Shock Monitor</span>
-      <span class="muted small" id="updated"></span>
+      <span id="updated"></span>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="hero">
-      <div class="hero-text">
-        <p class="eyebrow">Hypothesis: natural gas rallies in the month before the S&amp;P 500 tops out</p>
-        <h1><span class="dot" id="hero-dot"></span><span id="hero-state">—</span></h1>
-        <p id="hero-desc" class="lead"></p>
-        <dl class="kpis">
-          <div><dt>Gas, past month</dt><dd id="kpi-gas">—</dd><span class="muted small" id="kpi-gas-sub"></span></div>
-          <div><dt>10%+ fall within 3m</dt><dd id="kpi-odds">—</dd><span class="muted small" id="kpi-odds-sub"></span></div>
-          <div><dt>S&amp;P from high</dt><dd id="kpi-sp">—</dd><span class="muted small" id="kpi-sp-sub"></span></div>
-        </dl>
+    <div class="title-block">
+      <p class="kicker">Working paper · Commodities &amp; equity risk</p>
+      <h1>Does natural gas <em>warn</em> before the market breaks?</h1>
+      <p class="dek">A test of one idea: that Henry Hub natural gas rallies in the month before the S&amp;P 500 tops out ahead of its biggest falls. Every major decline since 2001, measured against what gas does on an ordinary day.</p>
+      <div class="byline" id="byline"></div>
+    </div>
+
+    <div class="abstract">
+      <div>
+        <p class="label">Abstract</p>
+        <p class="verdict" id="verdict"></p>
+        <p class="muted" id="abstract"></p>
       </div>
-      <figure class="card study">
-        <div class="study-box"><canvas id="forward" aria-label="Share of days followed by a 10% S&amp;P fall within 3 months, by past-month gas move"></canvas></div>
-        <figcaption class="muted small">How often the S&amp;P 500 fell 10%+ within 3 months, by how much gas moved over the month before. Dashed line: all days.</figcaption>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <section>
+      <p class="sec-num">1 · The record</p>
+      <h2>Twenty-five years of gas and stocks</h2>
+      <div class="prose"><p class="muted">The natural gas price above, the S&amp;P 500 below, both on log scales. Red bands mark every major decline (15% or more from a high) from peak to low; the amber strip before each band is the month the hypothesis is about.</p></div>
+      <figure class="fig">
+        <div class="legend" id="legend-timeline"></div>
+        <div class="fig-box tall"><canvas id="timeline" aria-label="S&amp;P 500 and natural gas since 2001 with major declines shaded"></canvas></div>
+        <figcaption><b>Figure 1.</b> Henry Hub front-month natural gas price (top) and S&amp;P 500 (bottom), both on log scales. Shading: major declines, peak to low.</figcaption>
       </figure>
     </section>
 
     <section>
-      <h2>Before the peak: gas in the month before every correction</h2>
-      <p id="back-lead" class="lead" style="max-width:none"></p>
-      <dl class="kpis" id="back-kpis"></dl>
-      <div class="card chart-card"><canvas id="gas-path" aria-label="Average natural gas path around S&amp;P 500 peaks"></canvas></div>
-      <p class="muted small">Average gas move around an S&amp;P 500 peak (day 0), relative to day 0: below zero on the left means gas rose into the peak. Grey band: 5–95% range for randomly shifted dates.</p>
-    </section>
-
-    <section>
-      <h2>Every correction since 2001</h2>
-      <p class="muted">Orange: natural gas, % from one month before the peak (the shaded month). Dark: S&amp;P 500, % from the peak, through the low and one month after.</p>
-      <div class="multiples" id="multiples"></div>
-    </section>
-
-    <section>
-      <h2>Does a bigger gas run-up mean a bigger fall?</h2>
-      <p id="scatter-lead" class="muted"></p>
-      <div class="card chart-card"><canvas id="scatter" aria-label="Gas move in the month before each peak against the depth of the S&amp;P fall"></canvas></div>
-    </section>
-
-    <section>
-      <h2>In real time: what followed each gas move</h2>
-      <p class="muted">Peaks are only known in hindsight. The usable test runs forward: on every trading day, take the past-month gas move and check whether the S&amp;P 500 fell 10% or more within the next 3 months. The p-value compares each bucket with randomly shifted days.</p>
-      <div class="card table-wrap">
-        <table id="forward-table">
-          <thead>
-            <tr><th>Gas, past month</th><th class="r">Days</th><th class="r">10%+ fall within 3m</th><th class="r">Average worst fall in 3m</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <p class="sec-num">2 · Seven crashes</p>
+      <h2>What gas did before each one</h2>
+      <div class="prose"><p class="muted" id="cases-lead"></p></div>
+      <div class="legend" style="margin-top:20px">
+        <span><i style="background:var(--gas)"></i>Natural gas, % from one month before the peak</span>
+        <span><i style="background:var(--crash)"></i>S&amp;P 500, % from the peak</span>
+        <span><i class="box" style="background:var(--gas-soft)"></i>The month before the peak</span>
       </div>
+      <div class="cases" id="cases"></div>
+    </section>
+
+    <section>
+      <p class="sec-num">3 · The pattern</p>
+      <h2>On average, gas drifts up into the top</h2>
+      <div class="prose"><p class="muted" id="path-lead"></p></div>
+      <figure class="fig">
+        <div class="fig-box"><canvas id="gas-path" aria-label="Average natural gas path around S&amp;P 500 peaks"></canvas></div>
+        <figcaption><b>Figure 2.</b> Average natural gas move around the seven peaks (day 0), relative to day 0, so a line below zero on the left means gas rose into the peak. Grey band: the 5–95% range of the same average for randomly shifted dates. Outside the band is unusual; inside is noise.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <p class="sec-num">4 · The calendar</p>
+      <h2>Every month of gas since 2001</h2>
+      <div class="prose"><p class="muted">Each cell is one month's roll-adjusted gas move. Outlined cells are the run-up month before a major peak and the month of the peak itself. If the hypothesis were a usable signal, the outlined cells would stand out from their neighbours.</p></div>
+      <figure class="fig">
+        <div class="cal" id="calendar"></div>
+        <div class="scale"><span>−30%</span><span class="bar" id="cal-scale"></span><span>+30%</span><span style="margin-left:14px"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;outline:2px solid var(--crash);outline-offset:-1px;vertical-align:-2px"></i> run-up and peak months</span></div>
+        <figcaption><b>Figure 3.</b> Monthly natural gas returns, roll-adjusted, January 2001 to today.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <p class="sec-num">5 · Size</p>
+      <h2>A bigger rally does not mean a bigger crash</h2>
+      <div class="prose"><p class="muted" id="scatter-lead"></p></div>
+      <figure class="fig">
+        <div class="fig-box"><canvas id="scatter" aria-label="Gas move before each peak against the depth of the S&amp;P fall"></canvas></div>
+        <figcaption><b>Figure 4.</b> Gas move in the month before each peak against the S&amp;P 500 fall that followed. Bubble size: trading days from peak to low.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <p class="sec-num">6 · Real time</p>
+      <h2>Could you have used it?</h2>
+      <div class="prose"><p class="muted" id="forward-lead"></p></div>
+      <figure class="fig">
+        <div class="fig-box short"><canvas id="forward" aria-label="Share of days followed by a 15% S&amp;P fall within 6 months, by past-month gas move"></canvas></div>
+        <figcaption><b>Figure 5.</b> Share of trading days followed by a 15%+ S&amp;P 500 fall within 6 months, grouped by the gas move over the month before. Dashed line: all days. A warning signal would show rising bars on the right.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <p class="sec-num">7 · Verdict</p>
+      <h2>What the evidence supports</h2>
+      <table class="score" id="score"></table>
+    </section>
+
+    <section>
+      <p class="sec-num">Today</p>
+      <div class="today" id="today"></div>
     </section>
 
     <section class="method">
-      <h2>Methodology</h2>
+      <h2>Methods</h2>
       <details>
         <summary>Definitions</summary>
         <ol>
-          <li><b>Correction</b> = S&amp;P 500 close at least 10% below a closing high (20% = bear market). An episode ends at a new high or after a 25% rally off its low, so the 2010 and 2011 corrections, which happened below the 2007 high, count separately.</li>
+          <li><b>Major decline</b> = S&amp;P 500 close at least 15% below a closing high (20%+ = bear market). An episode ends at a new high or after a 25% rally off its low, so the 2010 and 2011 declines, which happened below the 2007 high, count separately.</li>
           <li><b>Gas run-up</b> = Henry Hub front-month (NG=F) move over the 21 trading days to the S&amp;P peak. Roll-adjusted: the day the series switches contract is dropped, because the gap between two contracts is not a price move.</li>
-          <li><b>Forward buckets</b> are fixed at −10/0/+10/+20%, set before looking at results, so no future information goes into them.</li>
-          <li><b>p-values</b> come from circular shifts of the event dates (keeping clustering and overlapping windows), correlations from permutation tests.</li>
+          <li><b>Real-time test</b> uses fixed buckets (−10/0/+10/+20%) set before looking at results, and a 6-month horizon, so nothing from the future goes into it.</li>
+          <li><b>p-values</b> come from circular shifts of the event dates, which keep clustering and overlapping windows intact; correlations from permutation tests.</li>
         </ol>
       </details>
       <details>
         <summary>Limitations</summary>
         <ul>
-          <li>Ten corrections is a small sample. Several statistics are tested on this page, so a single p-value near 0.05 is weak evidence.</li>
-          <li>Stocks themselves rally into a peak, and commodities tend to rise in the same risk-on mood. Gas rising beforehand may be a symptom of that, not a cause.</li>
-          <li>Daily outcomes overlap: one bear market makes many neighbouring days count as "followed by a 10% fall".</li>
-          <li>The sample starts in 2001, so the 2000–2002 bear market is not included. Henry Hub is a US price; European gas (TTF) is not covered.</li>
+          <li>Seven declines is a very small sample. Several statistics are tested here, so any single p-value near 0.05 is weak evidence.</li>
+          <li>Peaks are dated with hindsight. Only the real-time test (section 6) reflects what an investor could have known.</li>
+          <li>Stocks rally into a peak, and commodities tend to rise in the same risk-on mood. Gas rising beforehand may be a symptom of the late-cycle rally, not a cause of the fall.</li>
+          <li>The sample starts in 2001, so the 2000–2002 bear market is not covered. Henry Hub is a US price; European gas (TTF) is not covered.</li>
         </ul>
       </details>
     </section>
   </main>
 
   <footer class="wrap muted small foot">
-    Data: Yahoo Finance daily closes (NG=F, ^GSPC). Refreshed on trading days. Not investment advice.
-    · <a href="https://github.com/kaloyantosev/natgas-shock">Source</a>
+    Data: Yahoo Finance daily closes (NG=F, ^GSPC), refreshed on trading days. Research, not investment advice.
+    · <a href="https://github.com/kaloyantosev/natgas-shock">Source and data</a>
   </footer>
 
   <script src="app.js"></script>
