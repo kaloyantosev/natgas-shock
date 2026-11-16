@@ -33,7 +33,15 @@
         <p class="verdict" id="verdict"></p>
         <p class="muted" id="abstract"></p>
       </div>
-      <div class="stats" id="stats"></div>
+      <div class="abstract-side">
+        <div class="stats" id="stats"></div>
+        <figure class="record">
+          <p class="label">Twenty-five years of gas and stocks</p>
+          <div class="legend" id="legend-timeline"></div>
+          <div class="record-box"><canvas id="timeline" aria-label="Natural gas and S&amp;P 500 since 2001 with major declines shaded"></canvas></div>
+          <figcaption><b>Figure 1.</b> Henry Hub front-month natural gas (top) and S&amp;P 500 (bottom), both on log scales. Red: every major decline (15%+), peak to low. Amber: the month before, where a warning spike would appear. Inside the red bands, a rising gas line is the hedge at work.</figcaption>
+        </figure>
+      </div>
     </div>
 
     <section>
@@ -56,18 +64,7 @@
     </section>
 
     <section>
-      <p class="sec-num">2 · The record</p>
-      <h2>Twenty-five years of gas and stocks</h2>
-      <div class="prose"><p class="muted">The natural gas price above, the S&amp;P 500 below, both on log scales. Red bands mark every major decline (15% or more from a high) from peak to low; the amber strip before each band is the month in which a warning spike would appear. Inside the red bands, a rising gas line is the hedge at work.</p></div>
-      <figure class="fig">
-        <div class="legend" id="legend-timeline"></div>
-        <div class="fig-box tall"><canvas id="timeline" aria-label="Natural gas and S&amp;P 500 since 2001 with major declines shaded"></canvas></div>
-        <figcaption><b>Figure 1.</b> Henry Hub front-month natural gas price (top) and S&amp;P 500 (bottom), both on log scales. Shading: major declines, peak to low.</figcaption>
-      </figure>
-    </section>
-
-    <section>
-      <p class="sec-num">3 · Seven crashes</p>
+      <p class="sec-num">2 · Seven crashes</p>
       <h2>Spike before, hedge during</h2>
       <div class="prose"><p class="muted" id="cases-lead"></p></div>
       <div class="legend" style="margin-top:20px">
@@ -80,7 +77,7 @@
     </section>
 
     <section>
-      <p class="sec-num">4 · Leading indicator</p>
+      <p class="sec-num">3 · Leading indicator</p>
       <h2>How often did gas spike before a crash?</h2>
       <div class="prose"><p class="muted" id="windows-lead"></p></div>
       <figure class="fig">
@@ -95,7 +92,7 @@
     </section>
 
     <section>
-      <p class="sec-num">5 · Hedge</p>
+      <p class="sec-num">4 · Hedge</p>
       <h2>What gas did while stocks fell</h2>
       <div class="prose"><p class="muted" id="hedge-lead"></p></div>
       <figure class="fig">
@@ -105,7 +102,7 @@
     </section>
 
     <section>
-      <p class="sec-num">6 · Size</p>
+      <p class="sec-num">5 · Size</p>
       <h2>Does a bigger spike mean a bigger crash?</h2>
       <div class="prose"><p class="muted" id="scatter-lead"></p></div>
       <figure class="fig">
@@ -115,7 +112,7 @@
     </section>
 
     <section>
-      <p class="sec-num">7 · Real time</p>
+      <p class="sec-num">6 · Real time</p>
       <h2>Could you have traded the warning?</h2>
       <div class="prose"><p class="muted" id="forward-lead"></p></div>
       <figure class="fig">
@@ -125,7 +122,7 @@
     </section>
 
     <section>
-      <p class="sec-num">8 · Verdict</p>
+      <p class="sec-num">7 · Verdict</p>
       <h2>What the evidence supports</h2>
       <table class="score" id="score"></table>
     </section>
